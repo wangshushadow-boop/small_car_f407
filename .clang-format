@@ -1,0 +1,16 @@
+BasedOnStyle: Google
+Language: Cpp
+ColumnLimit: 120
+UseTab: Never
+IndentWidth: 2
+TabWidth: 2
+PointerAlignment: Right
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+IncludeBlocks: Preserve
+SortIncludes: false
+SpacesInParentheses: false
+DerivePointerAlignment: false
