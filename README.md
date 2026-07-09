@@ -35,3 +35,8 @@ cmake --build --preset Release
 - 新增应用模块优先放在 `Core/Inc` 和 `Core/Src`。
 - 不提交固件二进制、map 文件、目标文件和 IDE 本地配置。
 - 硬件参考资料默认放在仓库外；只有需要长期追踪的原理图或资源分配表才放入仓库。
+
+## 文档
+
+- [项目文档](./docs/README.md)
+- [C30D V2.2 主板引脚与接线说明](./docs/c30d-v2.2-pinout.md)
