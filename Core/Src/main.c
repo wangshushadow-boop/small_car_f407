@@ -24,6 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "oled.h"
 #include "servo.h"
 
 /* USER CODE END Includes */
@@ -92,6 +93,7 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
+  Oled_Init();
   Servo_Init();
 
   /* USER CODE END 2 */
