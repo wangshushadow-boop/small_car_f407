@@ -28,6 +28,7 @@
 /* USER CODE BEGIN Includes */
 #include "debug_uart.h"
 #include "icm20948.h"
+#include "motor.h"
 #include "oled.h"
 #include "servo.h"
 
@@ -104,6 +105,7 @@ int main(void)
   Oled_Init();
   Icm20948Status imu_status = Icm20948_Init();
   DebugUart_Printf("[BOOT] ICM20948 init status=%d\r\n", imu_status);
+  Motor_Init();
   Servo_Init();
 
   /* USER CODE END 2 */

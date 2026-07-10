@@ -27,6 +27,7 @@
 /* USER CODE BEGIN Includes */
 #include "debug_uart.h"
 #include "icm20948.h"
+#include "motor.h"
 #include "oled.h"
 #include "servo.h"
 
@@ -128,6 +129,7 @@ void StartDefaultTask(void *argument)
   for(;;)
   {
     Servo_TestTaskStep();
+    Motor_TestTaskStep();
 
     if ((debug_counter % 5U) == 0U)
     {
