@@ -4,47 +4,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "main.h"
+#include "usart.h"
 
-#define DEBUG_UART_INSTANCE USART1
-#define DEBUG_UART_TX_PIN GPIO_PIN_9
-#define DEBUG_UART_RX_PIN GPIO_PIN_10
-#define DEBUG_UART_GPIO_AF 7U
-#define DEBUG_UART_CR1_UE USART_CR1_UE
-#define DEBUG_UART_CR1_TE USART_CR1_TE
-#define DEBUG_UART_CR1_RE USART_CR1_RE
-#define DEBUG_UART_SR_TXE USART_SR_TXE
-#define DEBUG_UART_SR_RXNE USART_SR_RXNE
-
-static void DebugUart_GPIOInit(void)
-{
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-
-  GPIOA->MODER &= ~((3UL << (9U * 2U)) | (3UL << (10U * 2U)));
-  GPIOA->MODER |= (2UL << (9U * 2U)) | (2UL << (10U * 2U));
-
-  GPIOA->OTYPER &= ~(DEBUG_UART_TX_PIN | DEBUG_UART_RX_PIN);
-
-  GPIOA->OSPEEDR &= ~((3UL << (9U * 2U)) | (3UL << (10U * 2U)));
-  GPIOA->OSPEEDR |= (3UL << (9U * 2U)) | (3UL << (10U * 2U));
-
-  GPIOA->PUPDR &= ~((3UL << (9U * 2U)) | (3UL << (10U * 2U)));
-  GPIOA->PUPDR |= (1UL << (9U * 2U)) | (1UL << (10U * 2U));
-
-  GPIOA->AFR[1] &= ~((0xFUL << ((9U - 8U) * 4U)) | (0xFUL << ((10U - 8U) * 4U)));
-  GPIOA->AFR[1] |= (DEBUG_UART_GPIO_AF << ((9U - 8U) * 4U)) | (DEBUG_UART_GPIO_AF << ((10U - 8U) * 4U));
-}
+#define DEBUG_UART_TX_TIMEOUT_MS 100U
 
 void DebugUart_Init(void)
 {
-  DebugUart_GPIOInit();
-  __HAL_RCC_USART1_CLK_ENABLE();
-
-  DEBUG_UART_INSTANCE->CR1 = 0U;
-  DEBUG_UART_INSTANCE->CR2 = 0U;
-  DEBUG_UART_INSTANCE->CR3 = 0U;
-  DEBUG_UART_INSTANCE->BRR = (HAL_RCC_GetPCLK2Freq() + (DEBUG_UART_BAUDRATE / 2U)) / DEBUG_UART_BAUDRATE;
-  DEBUG_UART_INSTANCE->CR1 = DEBUG_UART_CR1_TE | DEBUG_UART_CR1_RE | DEBUG_UART_CR1_UE;
+  /* USART1 is initialized by MX_USART1_UART_Init(). */
 }
 
 void DebugUart_Write(const uint8_t *data, size_t length)
@@ -54,18 +20,7 @@ void DebugUart_Write(const uint8_t *data, size_t length)
     return;
   }
 
-  for (size_t i = 0; i < length; ++i)
-  {
-    while ((DEBUG_UART_INSTANCE->SR & DEBUG_UART_SR_TXE) == 0U)
-    {
-    }
-
-    DEBUG_UART_INSTANCE->DR = data[i];
-  }
-
-  while ((DEBUG_UART_INSTANCE->SR & USART_SR_TC) == 0U)
-  {
-  }
+  (void)HAL_UART_Transmit(&huart1, (uint8_t *)data, (uint16_t)length, DEBUG_UART_TX_TIMEOUT_MS);
 }
 
 void DebugUart_WriteString(const char *text)
@@ -115,9 +70,11 @@ int __io_putchar(int ch)
 
 int __io_getchar(void)
 {
-  while ((DEBUG_UART_INSTANCE->SR & DEBUG_UART_SR_RXNE) == 0U)
+  uint8_t data = 0U;
+  if (HAL_UART_Receive(&huart1, &data, 1U, HAL_MAX_DELAY) != HAL_OK)
   {
+    return -1;
   }
 
-  return (int)(DEBUG_UART_INSTANCE->DR & 0xFFU);
+  return (int)data;
 }

@@ -19,12 +19,15 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
+#include "i2c.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "debug_uart.h"
+#include "icm20948.h"
 #include "oled.h"
 #include "servo.h"
 
@@ -93,10 +96,14 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM8_Init();
+  MX_I2C2_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   DebugUart_Init();
   DebugUart_WriteString("\r\n[BOOT] Debug UART1 ready, 115200 8N1\r\n");
   Oled_Init();
+  Icm20948Status imu_status = Icm20948_Init();
+  DebugUart_Printf("[BOOT] ICM20948 init status=%d\r\n", imu_status);
   Servo_Init();
 
   /* USER CODE END 2 */

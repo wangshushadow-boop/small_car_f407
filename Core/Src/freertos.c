@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "debug_uart.h"
+#include "icm20948.h"
 #include "oled.h"
 #include "servo.h"
 
@@ -128,9 +129,26 @@ void StartDefaultTask(void *argument)
   {
     Servo_TestTaskStep();
 
-    if ((debug_counter % 10U) == 0U)
+    if ((debug_counter % 5U) == 0U)
     {
-      DebugUart_Printf("[DEBUG] tick=%lu, count=%lu\r\n", HAL_GetTick(), debug_counter / 10U);
+      Icm20948Sample sample;
+      Icm20948Status imu_status = Icm20948_ReadSample(&sample);
+      if (imu_status == ICM20948_STATUS_OK)
+      {
+        DebugUart_Printf(
+            "[IMU] ax=%d ay=%d az=%d gx=%d gy=%d gz=%d temp=%d\r\n",
+            sample.accel_x,
+            sample.accel_y,
+            sample.accel_z,
+            sample.gyro_x,
+            sample.gyro_y,
+            sample.gyro_z,
+            sample.temperature);
+      }
+      else
+      {
+        DebugUart_Printf("[IMU] read failed, status=%d\r\n", imu_status);
+      }
     }
 
     ++debug_counter;
