@@ -25,6 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "debug_uart.h"
 #include "oled.h"
 #include "servo.h"
 
@@ -117,12 +118,22 @@ void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
   Oled_ShowBootScreen();
+  DebugUart_WriteString("[RTOS] Default task started\r\n");
   osDelay(1000);
+
+  uint32_t debug_counter = 0U;
 
   /* Infinite loop */
   for(;;)
   {
     Servo_TestTaskStep();
+
+    if ((debug_counter % 10U) == 0U)
+    {
+      DebugUart_Printf("[DEBUG] tick=%lu, count=%lu\r\n", HAL_GetTick(), debug_counter / 10U);
+    }
+
+    ++debug_counter;
     osDelay(100);
   }
   /* USER CODE END StartDefaultTask */

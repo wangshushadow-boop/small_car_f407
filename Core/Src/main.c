@@ -24,6 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "debug_uart.h"
 #include "oled.h"
 #include "servo.h"
 
@@ -93,6 +94,8 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
+  DebugUart_Init();
+  DebugUart_WriteString("\r\n[BOOT] Debug UART1 ready, 115200 8N1\r\n");
   Oled_Init();
   Servo_Init();
 
