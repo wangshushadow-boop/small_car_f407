@@ -22,6 +22,7 @@
 | 控制仲裁 | `Core/Inc/control_mux.h`、`Core/Src/control_mux.c` | 根据优先级选择最终控制指令。 |
 | 底盘执行 | `Core/Inc/chassis.h`、`Core/Src/chassis.c` | 将统一控制指令转换为四路电机速度命令。 |
 | 电机驱动 | `Core/Inc/motor.h`、`Core/Src/motor.c` | 提供单电机速度接口，将速度转换为 PWM 占空比和方向。 |
+| 编码器采集 | `Core/Inc/encoder.h`、`Core/Src/encoder.c` | 启动四路编码器定时器，维护累计计数和周期增量。 |
 
 ## 后续接入点
 

@@ -28,6 +28,7 @@
 #include "chassis.h"
 #include "control_mux.h"
 #include "debug_uart.h"
+#include "encoder.h"
 #include "gamepad.h"
 #include "host_link.h"
 #include "icm20948.h"
@@ -71,6 +72,7 @@ const osThreadAttr_t defaultTask_attributes = {
 
 void StartDefaultTask(void *argument);
 
+extern void MX_USB_HOST_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /**
@@ -122,6 +124,8 @@ void MX_FREERTOS_Init(void) {
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
+  /* init code for USB_HOST */
+  MX_USB_HOST_Init();
   /* USER CODE BEGIN StartDefaultTask */
   Oled_ShowBootScreen();
   DebugUart_WriteString("[RTOS] Default task started\r\n");
@@ -136,6 +140,7 @@ void StartDefaultTask(void *argument)
     Gamepad_TaskStep();
     HostLink_TaskStep();
     Ultrasonic_TaskStep();
+    Encoder_TaskStep();
 
     ControlCommand command;
     (void)ControlMux_SelectCommand(&command);
@@ -166,6 +171,21 @@ void StartDefaultTask(void *argument)
       {
         DebugUart_Printf("[IMU] read failed, status=%d\r\n", imu_status);
       }
+
+      EncoderSample encoder_a = Encoder_GetSample(MOTOR_A);
+      EncoderSample encoder_b = Encoder_GetSample(MOTOR_B);
+      EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
+      EncoderSample encoder_d = Encoder_GetSample(MOTOR_D);
+      DebugUart_Printf(
+          "[ENC] A=%ld/%d B=%ld/%d C=%ld/%d D=%ld/%d\r\n",
+          encoder_a.count,
+          encoder_a.delta,
+          encoder_b.count,
+          encoder_b.delta,
+          encoder_c.count,
+          encoder_c.delta,
+          encoder_d.count,
+          encoder_d.delta);
     }
 
     ++debug_counter;

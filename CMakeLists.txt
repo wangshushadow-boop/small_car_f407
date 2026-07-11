@@ -48,6 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/chassis.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/control_mux.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/debug_uart.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/encoder.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/gamepad.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/host_link.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/icm20948.c
