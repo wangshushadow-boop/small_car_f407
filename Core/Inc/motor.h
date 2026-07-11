@@ -17,8 +17,12 @@ typedef enum {
   MOTOR_DIRECTION_BRAKE,
 } MotorDirection;
 
+#define MOTOR_MAX_SPEED 1000
+
 void Motor_Init(void);
 void Motor_SetDirection(MotorId motor, MotorDirection direction);
+void Motor_SetSpeed(MotorId motor, int16_t speed);
+void Motor_SetAllSpeed(int16_t speed);
 void Motor_StopAll(void);
 void Motor_TestTaskStep(void);
 

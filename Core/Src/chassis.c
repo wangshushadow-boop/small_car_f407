@@ -6,24 +6,45 @@
 
 #define CHASSIS_DEADBAND 12
 
-static MotorDirection Chassis_ToDirection(int16_t value)
+static int16_t Chassis_ClampSpeed(int16_t speed)
 {
-  if (value > CHASSIS_DEADBAND)
+  if (speed > MOTOR_MAX_SPEED)
   {
-    return MOTOR_DIRECTION_FORWARD;
+    return MOTOR_MAX_SPEED;
   }
 
-  if (value < -CHASSIS_DEADBAND)
+  if (speed < -MOTOR_MAX_SPEED)
   {
-    return MOTOR_DIRECTION_REVERSE;
+    return -MOTOR_MAX_SPEED;
   }
 
-  return MOTOR_DIRECTION_STOP;
+  return speed;
 }
 
 void Chassis_Init(void)
 {
   Chassis_Stop();
+}
+
+void Chassis_SetVelocity(int16_t forward, int16_t turn)
+{
+  if (forward < CHASSIS_DEADBAND && forward > -CHASSIS_DEADBAND)
+  {
+    forward = 0;
+  }
+
+  if (turn < CHASSIS_DEADBAND && turn > -CHASSIS_DEADBAND)
+  {
+    turn = 0;
+  }
+
+  const int16_t left = Chassis_ClampSpeed(forward + turn);
+  const int16_t right = Chassis_ClampSpeed(forward - turn);
+
+  Motor_SetSpeed(MOTOR_A, left);
+  Motor_SetSpeed(MOTOR_B, left);
+  Motor_SetSpeed(MOTOR_C, right);
+  Motor_SetSpeed(MOTOR_D, right);
 }
 
 void Chassis_ApplyCommand(const ControlCommand *command)
@@ -34,13 +55,7 @@ void Chassis_ApplyCommand(const ControlCommand *command)
     return;
   }
 
-  const int16_t left = command->forward + command->turn;
-  const int16_t right = command->forward - command->turn;
-
-  Motor_SetDirection(MOTOR_A, Chassis_ToDirection(left));
-  Motor_SetDirection(MOTOR_B, Chassis_ToDirection(left));
-  Motor_SetDirection(MOTOR_C, Chassis_ToDirection(right));
-  Motor_SetDirection(MOTOR_D, Chassis_ToDirection(right));
+  Chassis_SetVelocity(command->forward, command->turn);
 }
 
 void Chassis_Stop(void)

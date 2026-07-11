@@ -104,6 +104,10 @@ int main(void)
   MX_TIM8_Init();
   MX_I2C2_Init();
   MX_USART1_UART_Init();
+  MX_TIM1_Init();
+  MX_TIM9_Init();
+  MX_TIM10_Init();
+  MX_TIM11_Init();
   /* USER CODE BEGIN 2 */
   DebugUart_Init();
   DebugUart_WriteString("\r\n[BOOT] Debug UART1 ready, 115200 8N1\r\n");

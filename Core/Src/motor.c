@@ -2,33 +2,62 @@
 
 #include "debug_uart.h"
 #include "main.h"
+#include "tim.h"
 
 #define MOTOR_TEST_RUN_TICKS 20U
 #define MOTOR_TEST_STOP_TICKS 3U
+#define MOTOR_SPEED_DEADBAND 10
 
 typedef struct {
-  GPIO_TypeDef *in1_port;
-  uint16_t in1_pin;
-  GPIO_TypeDef *in2_port;
-  uint16_t in2_pin;
+  TIM_HandleTypeDef *in1_timer;
+  uint32_t in1_channel;
+  TIM_HandleTypeDef *in2_timer;
+  uint32_t in2_channel;
   const char *name;
-} MotorPins;
+} MotorPwm;
 
-static const MotorPins kMotorPins[] = {
-    [MOTOR_A] = {MOTOR_A_IN1_GPIO_Port, MOTOR_A_IN1_Pin, MOTOR_A_IN2_GPIO_Port, MOTOR_A_IN2_Pin, "A"},
-    [MOTOR_B] = {MOTOR_B_IN1_GPIO_Port, MOTOR_B_IN1_Pin, MOTOR_B_IN2_GPIO_Port, MOTOR_B_IN2_Pin, "B"},
-    [MOTOR_C] = {MOTOR_C_IN1_GPIO_Port, MOTOR_C_IN1_Pin, MOTOR_C_IN2_GPIO_Port, MOTOR_C_IN2_Pin, "C"},
-    [MOTOR_D] = {MOTOR_D_IN1_GPIO_Port, MOTOR_D_IN1_Pin, MOTOR_D_IN2_GPIO_Port, MOTOR_D_IN2_Pin, "D"},
+static const MotorPwm kMotorPwms[] = {
+    [MOTOR_A] = {&htim11, TIM_CHANNEL_1, &htim10, TIM_CHANNEL_1, "A"},
+    [MOTOR_B] = {&htim9, TIM_CHANNEL_1, &htim9, TIM_CHANNEL_2, "B"},
+    [MOTOR_C] = {&htim1, TIM_CHANNEL_2, &htim1, TIM_CHANNEL_1, "C"},
+    [MOTOR_D] = {&htim1, TIM_CHANNEL_4, &htim1, TIM_CHANNEL_3, "D"},
 };
 
-static void Motor_WritePins(const MotorPins *pins, GPIO_PinState in1_state, GPIO_PinState in2_state)
+static uint32_t Motor_SpeedToCompare(const TIM_HandleTypeDef *timer, int16_t speed)
 {
-  HAL_GPIO_WritePin(pins->in1_port, pins->in1_pin, in1_state);
-  HAL_GPIO_WritePin(pins->in2_port, pins->in2_pin, in2_state);
+  const uint32_t period = __HAL_TIM_GET_AUTORELOAD((TIM_HandleTypeDef *)timer);
+  uint32_t compare = ((period + 1U) * (uint32_t)speed) / MOTOR_MAX_SPEED;
+  if (compare > period)
+  {
+    compare = period;
+  }
+
+  return compare;
+}
+
+static void Motor_SetPwm(const MotorPwm *pwm, int16_t in1_speed, int16_t in2_speed)
+{
+  __HAL_TIM_SET_COMPARE(pwm->in1_timer, pwm->in1_channel, Motor_SpeedToCompare(pwm->in1_timer, in1_speed));
+  __HAL_TIM_SET_COMPARE(pwm->in2_timer, pwm->in2_channel, Motor_SpeedToCompare(pwm->in2_timer, in2_speed));
+}
+
+static void Motor_StartPwmChannel(TIM_HandleTypeDef *timer, uint32_t channel)
+{
+  if (HAL_TIM_PWM_Start(timer, channel) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 void Motor_Init(void)
 {
+  for (MotorId motor = MOTOR_A; motor <= MOTOR_D; ++motor)
+  {
+    const MotorPwm *pwm = &kMotorPwms[motor];
+    Motor_StartPwmChannel(pwm->in1_timer, pwm->in1_channel);
+    Motor_StartPwmChannel(pwm->in2_timer, pwm->in2_channel);
+  }
+
   Motor_StopAll();
 }
 
@@ -39,25 +68,72 @@ void Motor_SetDirection(MotorId motor, MotorDirection direction)
     return;
   }
 
-  const MotorPins *pins = &kMotorPins[motor];
+  const MotorPwm *pwm = &kMotorPwms[motor];
   switch (direction)
   {
     case MOTOR_DIRECTION_FORWARD:
-      Motor_WritePins(pins, GPIO_PIN_SET, GPIO_PIN_RESET);
+      Motor_SetPwm(pwm, MOTOR_MAX_SPEED, 0);
       break;
 
     case MOTOR_DIRECTION_REVERSE:
-      Motor_WritePins(pins, GPIO_PIN_RESET, GPIO_PIN_SET);
+      Motor_SetPwm(pwm, 0, MOTOR_MAX_SPEED);
       break;
 
     case MOTOR_DIRECTION_BRAKE:
-      Motor_WritePins(pins, GPIO_PIN_SET, GPIO_PIN_SET);
+      Motor_SetPwm(pwm, MOTOR_MAX_SPEED, MOTOR_MAX_SPEED);
       break;
 
     case MOTOR_DIRECTION_STOP:
     default:
-      Motor_WritePins(pins, GPIO_PIN_RESET, GPIO_PIN_RESET);
+      Motor_SetPwm(pwm, 0, 0);
       break;
+  }
+}
+
+static int16_t Motor_ClampSpeed(int16_t speed)
+{
+  if (speed > MOTOR_MAX_SPEED)
+  {
+    return MOTOR_MAX_SPEED;
+  }
+
+  if (speed < -MOTOR_MAX_SPEED)
+  {
+    return -MOTOR_MAX_SPEED;
+  }
+
+  return speed;
+}
+
+void Motor_SetSpeed(MotorId motor, int16_t speed)
+{
+  if (motor > MOTOR_D)
+  {
+    return;
+  }
+
+  const int16_t clamped_speed = Motor_ClampSpeed(speed);
+
+  if (clamped_speed > MOTOR_SPEED_DEADBAND)
+  {
+    Motor_SetPwm(&kMotorPwms[motor], clamped_speed, 0);
+    return;
+  }
+
+  if (clamped_speed < -MOTOR_SPEED_DEADBAND)
+  {
+    Motor_SetPwm(&kMotorPwms[motor], 0, (int16_t)-clamped_speed);
+    return;
+  }
+
+  Motor_SetDirection(motor, MOTOR_DIRECTION_STOP);
+}
+
+void Motor_SetAllSpeed(int16_t speed)
+{
+  for (MotorId motor = MOTOR_A; motor <= MOTOR_D; ++motor)
+  {
+    Motor_SetSpeed(motor, speed);
   }
 }
 

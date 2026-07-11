@@ -20,7 +20,8 @@
 | 上位机通信 | `Core/Inc/host_link.h`、`Core/Src/host_link.c` | 预留上位机控制接口；当前默认没有控制指令。 |
 | 超声波 | `Core/Inc/ultrasonic.h`、`Core/Src/ultrasonic.c` | 预留测距和障碍检测接口；当前默认无有效测距。 |
 | 控制仲裁 | `Core/Inc/control_mux.h`、`Core/Src/control_mux.c` | 根据优先级选择最终控制指令。 |
-| 底盘执行 | `Core/Inc/chassis.h`、`Core/Src/chassis.c` | 将统一控制指令转换为四路电机方向输出。 |
+| 底盘执行 | `Core/Inc/chassis.h`、`Core/Src/chassis.c` | 将统一控制指令转换为四路电机速度命令。 |
+| 电机驱动 | `Core/Inc/motor.h`、`Core/Src/motor.c` | 提供单电机速度接口，将速度转换为 PWM 占空比和方向。 |
 
 ## 后续接入点
 
@@ -28,3 +29,9 @@
 - 上位机协议确定后，只需要在 `host_link.c` 内部解析串口或其他链路的控制指令。
 - 超声波引脚和测距方式确定后，只需要在 `ultrasonic.c` 内部实现触发、计时和距离换算。
 - 更精细的速度控制、编码器闭环和 PID 控制可以继续放到底盘层或新增运动控制层。
+
+## 速度约定
+
+- 电机速度范围为 `-1000` 到 `1000`。
+- 正值表示正转，负值表示反转，`0` 表示停止。
+- 当前 PWM 已接入电机控制脚，速度绝对值会映射为 PWM 占空比。
