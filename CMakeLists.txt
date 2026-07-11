@@ -45,11 +45,16 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/chassis.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/control_mux.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/debug_uart.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/gamepad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/host_link.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/icm20948.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/motor.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/oled.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/servo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ultrasonic.c
 )
 
 # Add include paths

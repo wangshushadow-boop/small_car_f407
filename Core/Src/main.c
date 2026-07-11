@@ -26,11 +26,16 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "chassis.h"
+#include "control_mux.h"
 #include "debug_uart.h"
+#include "gamepad.h"
+#include "host_link.h"
 #include "icm20948.h"
 #include "motor.h"
 #include "oled.h"
 #include "servo.h"
+#include "ultrasonic.h"
 
 /* USER CODE END Includes */
 
@@ -106,7 +111,12 @@ int main(void)
   Icm20948Status imu_status = Icm20948_Init();
   DebugUart_Printf("[BOOT] ICM20948 init status=%d\r\n", imu_status);
   Motor_Init();
+  Chassis_Init();
   Servo_Init();
+  Ultrasonic_Init();
+  Gamepad_Init();
+  HostLink_Init();
+  ControlMux_Init();
 
   /* USER CODE END 2 */
 

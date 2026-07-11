@@ -75,6 +75,7 @@ Desktop.ini
 .DS_Store
 
 # Logs and temporary files
+.codex_tmp/
 *.log
 *.tmp
 *.bak

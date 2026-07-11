@@ -25,11 +25,15 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "chassis.h"
+#include "control_mux.h"
 #include "debug_uart.h"
+#include "gamepad.h"
+#include "host_link.h"
 #include "icm20948.h"
-#include "motor.h"
 #include "oled.h"
 #include "servo.h"
+#include "ultrasonic.h"
 
 /* USER CODE END Includes */
 
@@ -56,7 +60,7 @@
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 128 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 
@@ -124,12 +128,24 @@ void StartDefaultTask(void *argument)
   osDelay(1000);
 
   uint32_t debug_counter = 0U;
+  ControlSource last_source = CONTROL_SOURCE_NONE;
 
   /* Infinite loop */
   for(;;)
   {
     Servo_TestTaskStep();
-    Motor_TestTaskStep();
+    Gamepad_TaskStep();
+    HostLink_TaskStep();
+    Ultrasonic_TaskStep();
+
+    ControlCommand command;
+    (void)ControlMux_SelectCommand(&command);
+    Chassis_ApplyCommand(&command);
+    if (command.source != last_source)
+    {
+      DebugUart_Printf("[CTRL] source=%d enabled=%d\r\n", command.source, command.enabled ? 1 : 0);
+      last_source = command.source;
+    }
 
     if ((debug_counter % 5U) == 0U)
     {
