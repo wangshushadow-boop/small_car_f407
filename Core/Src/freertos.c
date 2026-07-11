@@ -30,6 +30,7 @@
 #include "debug_uart.h"
 #include "encoder.h"
 #include "gamepad.h"
+#include "gamepad_servo.h"
 #include "host_link.h"
 #include "icm20948.h"
 #include "oled.h"
@@ -146,6 +147,7 @@ void StartDefaultTask(void *argument)
   for(;;)
   {
     Gamepad_TaskStep();
+    GamepadServo_TaskStep();
     HostLink_TaskStep();
     Ultrasonic_TaskStep();
     Encoder_TaskStep();

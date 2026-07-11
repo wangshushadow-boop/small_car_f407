@@ -50,6 +50,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/debug_uart.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/encoder.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/gamepad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/gamepad_servo.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/gamepad_usb.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/host_link.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/icm20948.c

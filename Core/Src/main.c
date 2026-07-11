@@ -32,6 +32,7 @@
 #include "debug_uart.h"
 #include "encoder.h"
 #include "gamepad.h"
+#include "gamepad_servo.h"
 #include "host_link.h"
 #include "icm20948.h"
 #include "motor.h"
@@ -126,6 +127,7 @@ int main(void)
   Servo_Init();
   Ultrasonic_Init();
   Gamepad_Init();
+  GamepadServo_Init();
   HostLink_Init();
   ControlMux_Init();
 

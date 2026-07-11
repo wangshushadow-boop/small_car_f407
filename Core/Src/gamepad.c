@@ -94,11 +94,11 @@ bool Gamepad_GetControlCommand(ControlCommand *command)
 
   const int16_t centered_ly =
       ApplyDeadband((int16_t)GAMEPAD_CENTER_VALUE - (int16_t)g_gamepad_state.ly);
-  const int16_t centered_rx =
-      ApplyDeadband((int16_t)g_gamepad_state.rx - (int16_t)GAMEPAD_CENTER_VALUE);
+  const int16_t centered_lx =
+      ApplyDeadband((int16_t)g_gamepad_state.lx - (int16_t)GAMEPAD_CENTER_VALUE);
   command->enabled = true;
   command->forward = (int16_t)((centered_ly * MOTOR_MAX_SPEED) / GAMEPAD_CENTER_VALUE);
-  command->turn = (int16_t)((centered_rx * MOTOR_MAX_SPEED) / GAMEPAD_CENTER_VALUE);
+  command->turn = (int16_t)((centered_lx * MOTOR_MAX_SPEED) / GAMEPAD_CENTER_VALUE);
   return true;
 }
 
