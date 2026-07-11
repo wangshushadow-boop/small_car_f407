@@ -1,9 +1,13 @@
 #include "servo.h"
 
+#include "debug_uart.h"
 #include "main.h"
 #include "tim.h"
 
 #define SERVO_TEST_STEP_US 25
+
+static uint16_t g_servo_pulse_us[2] = {0U, 0U};
+static uint8_t g_servo_pulse_valid[2] = {0U, 0U};
 
 static uint16_t Servo_ClampPulse(uint16_t pulse_us)
 {
@@ -38,13 +42,27 @@ void Servo_Init(void)
 void Servo_SetPulse(ServoChannel channel, uint16_t pulse_us)
 {
   uint32_t tim_channel = TIM_CHANNEL_3;
+  const char *channel_name = "left";
 
   if (channel == SERVO_CHANNEL_RIGHT)
   {
     tim_channel = TIM_CHANNEL_4;
+    channel_name = "right";
+  }
+  else if (channel != SERVO_CHANNEL_LEFT)
+  {
+    return;
   }
 
-  __HAL_TIM_SET_COMPARE(&htim8, tim_channel, Servo_ClampPulse(pulse_us));
+  const uint16_t clamped_pulse_us = Servo_ClampPulse(pulse_us);
+  __HAL_TIM_SET_COMPARE(&htim8, tim_channel, clamped_pulse_us);
+
+  if ((g_servo_pulse_valid[channel] == 0U) || (g_servo_pulse_us[channel] != clamped_pulse_us))
+  {
+    g_servo_pulse_valid[channel] = 1U;
+    g_servo_pulse_us[channel] = clamped_pulse_us;
+    DebugUart_PrintfIf(DEBUG_LOG_SERVO, "[SERVO] %s=%u us\r\n", channel_name, clamped_pulse_us);
+  }
 }
 
 void Servo_SetBothPulse(uint16_t left_pulse_us, uint16_t right_pulse_us)

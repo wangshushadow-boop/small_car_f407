@@ -106,6 +106,14 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
+  if (defaultTaskHandle == NULL)
+  {
+    DebugUart_WriteStringIf(DEBUG_LOG_RTOS, "[RTOS] defaultTask create failed\r\n");
+  }
+  else
+  {
+    DebugUart_WriteStringIf(DEBUG_LOG_RTOS, "[RTOS] defaultTask created\r\n");
+  }
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
@@ -128,7 +136,7 @@ void StartDefaultTask(void *argument)
   MX_USB_HOST_Init();
   /* USER CODE BEGIN StartDefaultTask */
   Oled_ShowBootScreen();
-  DebugUart_WriteString("[RTOS] Default task started\r\n");
+  DebugUart_WriteStringIf(DEBUG_LOG_RTOS, "[RTOS] Default task started\r\n");
   osDelay(1000);
 
   uint32_t debug_counter = 0U;
@@ -147,7 +155,10 @@ void StartDefaultTask(void *argument)
     Chassis_ApplyCommand(&command);
     if (command.source != last_source)
     {
-      DebugUart_Printf("[CTRL] source=%d enabled=%d\r\n", command.source, command.enabled ? 1 : 0);
+      DebugUart_PrintfIf(DEBUG_LOG_CONTROL,
+                         "[CTRL] source=%d enabled=%d\r\n",
+                         command.source,
+                         command.enabled ? 1 : 0);
       last_source = command.source;
     }
 
@@ -157,7 +168,8 @@ void StartDefaultTask(void *argument)
       Icm20948Status imu_status = Icm20948_ReadSample(&sample);
       if (imu_status == ICM20948_STATUS_OK)
       {
-        DebugUart_Printf(
+        DebugUart_PrintfIf(
+            DEBUG_LOG_IMU,
             "[IMU] ax=%d ay=%d az=%d gx=%d gy=%d gz=%d temp=%d\r\n",
             sample.accel_x,
             sample.accel_y,
@@ -169,14 +181,15 @@ void StartDefaultTask(void *argument)
       }
       else
       {
-        DebugUart_Printf("[IMU] read failed, status=%d\r\n", imu_status);
+        DebugUart_PrintfIf(DEBUG_LOG_IMU, "[IMU] read failed, status=%d\r\n", imu_status);
       }
 
       EncoderSample encoder_a = Encoder_GetSample(MOTOR_A);
       EncoderSample encoder_b = Encoder_GetSample(MOTOR_B);
       EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
       EncoderSample encoder_d = Encoder_GetSample(MOTOR_D);
-      DebugUart_Printf(
+      DebugUart_PrintfIf(
+          DEBUG_LOG_ENCODER,
           "[ENC] A=%ld/%d B=%ld/%d C=%ld/%d D=%ld/%d\r\n",
           encoder_a.count,
           encoder_a.delta,

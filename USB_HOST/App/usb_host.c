@@ -25,6 +25,8 @@
 #include "usbh_hid.h"
 
 /* USER CODE BEGIN Includes */
+#include "debug_uart.h"
+#include "gamepad_usb.h"
 
 /* USER CODE END Includes */
 
@@ -68,6 +70,29 @@ static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id);
 void MX_USB_HOST_Init(void)
 {
   /* USER CODE BEGIN USB_HOST_Init_PreTreatment */
+  DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] host init begin\r\n");
+  if (USBH_Init(&hUsbHostFS, USBH_UserProcess, HOST_FS) != USBH_OK)
+  {
+    DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] USBH_Init failed\r\n");
+    Error_Handler();
+  }
+  if (USBH_RegisterClass(&hUsbHostFS, &GamepadUsbHidClass) != USBH_OK)
+  {
+    DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] register HID class failed\r\n");
+    Error_Handler();
+  }
+  if (USBH_RegisterClass(&hUsbHostFS, &GamepadUsbVendorHidClass) != USBH_OK)
+  {
+    DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] register vendor class failed\r\n");
+    Error_Handler();
+  }
+  if (USBH_Start(&hUsbHostFS) != USBH_OK)
+  {
+    DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] USBH_Start failed\r\n");
+    Error_Handler();
+  }
+  DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] host init ok\r\n");
+  return;
 
   /* USER CODE END USB_HOST_Init_PreTreatment */
 
@@ -98,18 +123,26 @@ static void USBH_UserProcess  (USBH_HandleTypeDef *phost, uint8_t id)
   switch(id)
   {
   case HOST_USER_SELECT_CONFIGURATION:
+  DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] select configuration\r\n");
   break;
 
   case HOST_USER_DISCONNECTION:
   Appli_state = APPLICATION_DISCONNECT;
+  DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] disconnected\r\n");
   break;
 
   case HOST_USER_CLASS_ACTIVE:
   Appli_state = APPLICATION_READY;
+  DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] class active\r\n");
   break;
 
   case HOST_USER_CONNECTION:
   Appli_state = APPLICATION_START;
+  DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] connected\r\n");
+  break;
+
+  case HOST_USER_CLASS_SELECTED:
+  DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] class selected\r\n");
   break;
 
   default:

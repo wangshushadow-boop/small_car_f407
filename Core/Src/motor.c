@@ -7,6 +7,8 @@
 #define MOTOR_TEST_RUN_TICKS 20U
 #define MOTOR_TEST_STOP_TICKS 3U
 #define MOTOR_SPEED_DEADBAND 10
+#define MOTOR_REPORT_SPEED_UNKNOWN ((int16_t)-32768)
+#define MOTOR_REPORT_DIRECTION_UNKNOWN 0xFFU
 
 typedef struct {
   TIM_HandleTypeDef *in1_timer;
@@ -22,6 +24,61 @@ static const MotorPwm kMotorPwms[] = {
     [MOTOR_C] = {&htim1, TIM_CHANNEL_2, &htim1, TIM_CHANNEL_1, "C"},
     [MOTOR_D] = {&htim1, TIM_CHANNEL_4, &htim1, TIM_CHANNEL_3, "D"},
 };
+
+static int16_t g_reported_speed[] = {
+    [MOTOR_A] = MOTOR_REPORT_SPEED_UNKNOWN,
+    [MOTOR_B] = MOTOR_REPORT_SPEED_UNKNOWN,
+    [MOTOR_C] = MOTOR_REPORT_SPEED_UNKNOWN,
+    [MOTOR_D] = MOTOR_REPORT_SPEED_UNKNOWN,
+};
+static uint8_t g_reported_direction[] = {
+    [MOTOR_A] = MOTOR_REPORT_DIRECTION_UNKNOWN,
+    [MOTOR_B] = MOTOR_REPORT_DIRECTION_UNKNOWN,
+    [MOTOR_C] = MOTOR_REPORT_DIRECTION_UNKNOWN,
+    [MOTOR_D] = MOTOR_REPORT_DIRECTION_UNKNOWN,
+};
+
+static const char *Motor_DirectionName(MotorDirection direction)
+{
+  switch (direction)
+  {
+    case MOTOR_DIRECTION_FORWARD:
+      return "forward";
+
+    case MOTOR_DIRECTION_REVERSE:
+      return "reverse";
+
+    case MOTOR_DIRECTION_BRAKE:
+      return "brake";
+
+    case MOTOR_DIRECTION_STOP:
+    default:
+      return "stop";
+  }
+}
+
+static void Motor_ReportDirection(MotorId motor, MotorDirection direction)
+{
+  if (g_reported_direction[motor] == (uint8_t)direction)
+  {
+    return;
+  }
+
+  g_reported_direction[motor] = (uint8_t)direction;
+  DebugUart_PrintfIf(DEBUG_LOG_MOTOR, "[MOTOR] %s %s\r\n", kMotorPwms[motor].name,
+                     Motor_DirectionName(direction));
+}
+
+static void Motor_ReportSpeed(MotorId motor, int16_t speed)
+{
+  if (g_reported_speed[motor] == speed)
+  {
+    return;
+  }
+
+  g_reported_speed[motor] = speed;
+  DebugUart_PrintfIf(DEBUG_LOG_MOTOR, "[MOTOR] %s speed=%d\r\n", kMotorPwms[motor].name, speed);
+}
 
 static uint32_t Motor_SpeedToCompare(const TIM_HandleTypeDef *timer, int16_t speed)
 {
@@ -88,6 +145,8 @@ void Motor_SetDirection(MotorId motor, MotorDirection direction)
       Motor_SetPwm(pwm, 0, 0);
       break;
   }
+
+  Motor_ReportDirection(motor, direction);
 }
 
 static int16_t Motor_ClampSpeed(int16_t speed)
@@ -117,16 +176,19 @@ void Motor_SetSpeed(MotorId motor, int16_t speed)
   if (clamped_speed > MOTOR_SPEED_DEADBAND)
   {
     Motor_SetPwm(&kMotorPwms[motor], clamped_speed, 0);
+    Motor_ReportSpeed(motor, clamped_speed);
     return;
   }
 
   if (clamped_speed < -MOTOR_SPEED_DEADBAND)
   {
     Motor_SetPwm(&kMotorPwms[motor], 0, (int16_t)-clamped_speed);
+    Motor_ReportSpeed(motor, clamped_speed);
     return;
   }
 
   Motor_SetDirection(motor, MOTOR_DIRECTION_STOP);
+  Motor_ReportSpeed(motor, 0);
 }
 
 void Motor_SetAllSpeed(int16_t speed)
@@ -169,7 +231,7 @@ void Motor_TestTaskStep(void)
   if (initialized == 0U)
   {
     initialized = 1U;
-    DebugUart_WriteString("[MOTOR] all-motor forward/reverse test start\r\n");
+    DebugUart_WriteStringIf(DEBUG_LOG_MOTOR, "[MOTOR] all-motor forward/reverse test start\r\n");
   }
 
   if (ticks_in_state == 0U)
@@ -178,23 +240,23 @@ void Motor_TestTaskStep(void)
     {
       case TEST_ALL_FORWARD:
         Motor_SetAllDirection(MOTOR_DIRECTION_FORWARD);
-        DebugUart_WriteString("[MOTOR] all forward\r\n");
+        DebugUart_WriteStringIf(DEBUG_LOG_MOTOR, "[MOTOR] all forward\r\n");
         break;
 
       case TEST_STOP_AFTER_FORWARD:
         Motor_StopAll();
-        DebugUart_WriteString("[MOTOR] all stop\r\n");
+        DebugUart_WriteStringIf(DEBUG_LOG_MOTOR, "[MOTOR] all stop\r\n");
         break;
 
       case TEST_ALL_REVERSE:
         Motor_SetAllDirection(MOTOR_DIRECTION_REVERSE);
-        DebugUart_WriteString("[MOTOR] all reverse\r\n");
+        DebugUart_WriteStringIf(DEBUG_LOG_MOTOR, "[MOTOR] all reverse\r\n");
         break;
 
       case TEST_STOP_AFTER_REVERSE:
       default:
         Motor_StopAll();
-        DebugUart_WriteString("[MOTOR] all stop\r\n");
+        DebugUart_WriteStringIf(DEBUG_LOG_MOTOR, "[MOTOR] all stop\r\n");
         break;
     }
   }

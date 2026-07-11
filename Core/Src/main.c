@@ -116,10 +116,10 @@ int main(void)
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   DebugUart_Init();
-  DebugUart_WriteString("\r\n[BOOT] Debug UART1 ready, 115200 8N1\r\n");
+  DebugUart_WriteStringIf(DEBUG_LOG_BOOT, "\r\n[BOOT] Debug UART1 ready, 115200 8N1\r\n");
   Oled_Init();
   Icm20948Status imu_status = Icm20948_Init();
-  DebugUart_Printf("[BOOT] ICM20948 init status=%d\r\n", imu_status);
+  DebugUart_PrintfIf(DEBUG_LOG_BOOT, "[BOOT] ICM20948 init status=%d\r\n", imu_status);
   Motor_Init();
   Encoder_Init();
   Chassis_Init();
@@ -172,8 +172,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 15;
-  RCC_OscInitStruct.PLL.PLLN = 144;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 120;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 5;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
