@@ -12,9 +12,11 @@
 
 static volatile uint8_t g_sample_valid = 0U;
 static volatile uint16_t g_distance_mm = 0U;
+static volatile uint32_t g_echo_pulse_us = 0U;
 static volatile uint32_t g_echo_rise_us = 0U;
 static volatile uint8_t g_echo_capturing = 0U;
 static volatile uint8_t g_echo_waiting = 0U;
+static volatile uint8_t g_report_pending = 0U;
 static uint32_t g_last_trigger_ms = 0U;
 static uint32_t g_cycles_per_us = 1U;
 
@@ -46,9 +48,11 @@ void Ultrasonic_Init(void)
 {
   g_sample_valid = 0U;
   g_distance_mm = 0U;
+  g_echo_pulse_us = 0U;
   g_echo_rise_us = 0U;
   g_echo_capturing = 0U;
   g_echo_waiting = 0U;
+  g_report_pending = 0U;
   g_last_trigger_ms = 0U;
 
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -71,6 +75,15 @@ void Ultrasonic_TaskStep(void)
     g_echo_capturing = 0U;
     g_sample_valid = 0U;
     DebugUart_WriteStringIf(DEBUG_LOG_ULTRASONIC, "[ULTRA] timeout\r\n");
+  }
+
+  if (g_report_pending != 0U)
+  {
+    g_report_pending = 0U;
+    DebugUart_PrintfIf(DEBUG_LOG_ULTRASONIC,
+                       "[ULTRA] distance=%u mm pulse=%lu us\r\n",
+                       g_distance_mm,
+                       g_echo_pulse_us);
   }
 
   if ((g_echo_waiting == 0U) && ((now_ms - g_last_trigger_ms) >= ULTRASONIC_TRIGGER_PERIOD_MS))
@@ -134,9 +147,7 @@ void Ultrasonic_OnEchoEdge(uint16_t gpio_pin)
   }
 
   g_distance_mm = (uint16_t)((pulse_us * 343U) / 2000U);
+  g_echo_pulse_us = pulse_us;
   g_sample_valid = 1U;
-  DebugUart_PrintfIf(DEBUG_LOG_ULTRASONIC,
-                     "[ULTRA] distance=%u mm pulse=%lu us\r\n",
-                     g_distance_mm,
-                     pulse_us);
+  g_report_pending = 1U;
 }
