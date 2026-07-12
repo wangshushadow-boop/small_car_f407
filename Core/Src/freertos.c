@@ -177,7 +177,7 @@ void StartDefaultTask(void *argument)
     }
 
     /* 涓诲惊鐜懆鏈熴€傚悗缁仛闂幆鎺у埗鏃讹紝鍙互鏍规嵁闇€瑕佺缉鐭懆鏈熸垨鎷嗗垎浠诲姟銆?*/
-    osDelay(100);
+    osDelay(20);
   }
   /* USER CODE END StartDefaultTask */
 }

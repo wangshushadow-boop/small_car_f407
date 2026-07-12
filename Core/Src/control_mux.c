@@ -3,12 +3,12 @@
 #include <stddef.h>
 
 #include "gamepad.h"
-#include "host_link.h"
+#include "raspi_link.h"
 #include "ultrasonic.h"
 
 void ControlMux_Init(void)
 {
-  /* 当前仲裁层没有状态需要初始化，保留入口方便后续扩展。 */
+  /* 当前仲裁层没有需要初始化的状态，保留入口方便后续扩展。 */
 }
 
 bool ControlMux_SelectCommand(ControlCommand *command)
@@ -19,8 +19,8 @@ bool ControlMux_SelectCommand(ControlCommand *command)
   }
 
   /*
-   * 安全保护放在最高优先级：
-   * 一旦超声波判断前方距离过近，无论手柄或上位机是否有指令，都强制输出停车。
+   * 安全保护优先级最高。
+   * 一旦超声判断前方过近，无论手柄或树莓派是否有命令，都强制停车。
    */
   if (Ultrasonic_IsObstacleNear())
   {
@@ -31,19 +31,19 @@ bool ControlMux_SelectCommand(ControlCommand *command)
     return true;
   }
 
-  /* 手柄优先级高于上位机，方便现场调试时随时接管小车。 */
+  /* 手柄优先级高于树莓派，现场调试时可以随时接管。 */
   if (Gamepad_GetControlCommand(command))
   {
     return true;
   }
 
-  /* 上位机控制入口已保留，目前 HostLink 还没有实现运动协议。 */
-  if (HostLink_GetControlCommand(command))
+  /* 树莓派通过 USART3 下发控制命令，超过 300ms 未更新会自动失效。 */
+  if (RaspiLink_GetControlCommand(command))
   {
     return true;
   }
 
-  /* 没有任何有效控制源时输出空闲指令，底盘层会停车。 */
+  /* 没有有效控制源时输出空闲命令，底盘层会停车。 */
   command->source = CONTROL_SOURCE_NONE;
   command->enabled = false;
   command->forward = 0;

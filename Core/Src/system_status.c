@@ -11,20 +11,35 @@
 #include "raspi_link.h"
 #include "ultrasonic.h"
 
-#define HOST_REPORT_PERIOD_MS 500U
+#define CHASSIS_REPORT_PERIOD_MS 50U
+#define ENCODER_REPORT_PERIOD_MS 20U
+#define IMU_REPORT_PERIOD_MS 20U
+#define DEVICE_REPORT_PERIOD_MS 1000U
 #define OLED_REPORT_PERIOD_MS 1000U
 
-static uint32_t g_last_host_report_tick = 0U;
+static uint32_t g_last_chassis_report_tick = 0U;
+static uint32_t g_last_encoder_report_tick = 0U;
+static uint32_t g_last_imu_report_tick = 0U;
+static uint32_t g_last_device_report_tick = 0U;
 static uint32_t g_last_oled_report_tick = 0U;
+static bool g_imu_ok = false;
 
 static const char *SourceToText(ControlSource source);
-static void ReportToHost(const ControlCommand *command);
+static void ReportChassisToHost(const ControlCommand *command);
+static void ReportEncoderToHost(void);
+static void ReportImuToHost(void);
+static void ReportDeviceToHost(void);
 static void ReportToOled(const ControlCommand *command);
 
 void SystemStatus_Init(void)
 {
-  g_last_host_report_tick = HAL_GetTick();
-  g_last_oled_report_tick = HAL_GetTick();
+  uint32_t now = HAL_GetTick();
+  g_last_chassis_report_tick = now;
+  g_last_encoder_report_tick = now;
+  g_last_imu_report_tick = now;
+  g_last_device_report_tick = now;
+  g_last_oled_report_tick = now;
+  g_imu_ok = false;
 }
 
 void SystemStatus_TaskStep(const ControlCommand *command)
@@ -36,10 +51,28 @@ void SystemStatus_TaskStep(const ControlCommand *command)
 
   uint32_t now = HAL_GetTick();
 
-  if ((now - g_last_host_report_tick) >= HOST_REPORT_PERIOD_MS)
+  if ((now - g_last_chassis_report_tick) >= CHASSIS_REPORT_PERIOD_MS)
   {
-    g_last_host_report_tick = now;
-    ReportToHost(command);
+    g_last_chassis_report_tick = now;
+    ReportChassisToHost(command);
+  }
+
+  if ((now - g_last_encoder_report_tick) >= ENCODER_REPORT_PERIOD_MS)
+  {
+    g_last_encoder_report_tick = now;
+    ReportEncoderToHost();
+  }
+
+  if ((now - g_last_imu_report_tick) >= IMU_REPORT_PERIOD_MS)
+  {
+    g_last_imu_report_tick = now;
+    ReportImuToHost();
+  }
+
+  if ((now - g_last_device_report_tick) >= DEVICE_REPORT_PERIOD_MS)
+  {
+    g_last_device_report_tick = now;
+    ReportDeviceToHost();
   }
 
   if ((now - g_last_oled_report_tick) >= OLED_REPORT_PERIOD_MS)
@@ -65,37 +98,31 @@ static const char *SourceToText(ControlSource source)
   }
 }
 
-static void ReportToHost(const ControlCommand *command)
+static void ReportChassisToHost(const ControlCommand *command)
 {
-  char line[192];
-  GamepadState gamepad = {0};
   UltrasonicSample ultrasonic = {0};
+  int16_t ultra_mm = -1;
+
+  if (Ultrasonic_GetSample(&ultrasonic) && ultrasonic.valid)
+  {
+    ultra_mm = (int16_t)ultrasonic.distance_mm;
+  }
+
+  RaspiLink_SendChassisStatus(command, ultra_mm);
+}
+
+static void ReportEncoderToHost(void)
+{
   EncoderSample encoder_a = Encoder_GetSample(MOTOR_A);
   EncoderSample encoder_b = Encoder_GetSample(MOTOR_B);
   EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
   EncoderSample encoder_d = Encoder_GetSample(MOTOR_D);
 
-  (void)Gamepad_GetState(&gamepad);
-  (void)Ultrasonic_GetSample(&ultrasonic);
+  RaspiLink_SendEncoderDelta(encoder_a.delta,
+                             encoder_b.delta,
+                             encoder_c.delta,
+                             encoder_d.delta);
 
-  /*
-   * USART3 面向树莓派，保持一行一条结构化状态。
-   * 这里只发送当前代码里有可靠来源的数据，不猜测电池、电压、里程等字段。
-   */
-  (void)snprintf(line,
-                 sizeof(line),
-                 "STAT src=%s en=%d f=%d t=%d pad=%d ultra=%d enc=%ld,%ld,%ld,%ld\r\n",
-                 SourceToText(command->source),
-                 command->enabled ? 1 : 0,
-                 command->forward,
-                 command->turn,
-                 gamepad.connected ? 1 : 0,
-                 ultrasonic.valid ? ultrasonic.distance_mm : -1,
-                 encoder_a.count,
-                 encoder_b.count,
-                 encoder_c.count,
-                 encoder_d.count);
-  RaspiLink_WriteString(line);
   DebugUart_PrintfIf(
       DEBUG_LOG_ENCODER,
       "[ENC] A=%ld/%d B=%ld/%d C=%ld/%d D=%ld/%d\r\n",
@@ -107,22 +134,23 @@ static void ReportToHost(const ControlCommand *command)
       encoder_c.delta,
       encoder_d.count,
       encoder_d.delta);
+}
 
+static void ReportImuToHost(void)
+{
   Icm20948Sample imu = {0};
   Icm20948Status imu_status = Icm20948_ReadSample(&imu);
-  if (imu_status == ICM20948_STATUS_OK)
+  g_imu_ok = (imu_status == ICM20948_STATUS_OK);
+
+  if (g_imu_ok)
   {
-    (void)snprintf(line,
-                   sizeof(line),
-                   "IMU ax=%d ay=%d az=%d gx=%d gy=%d gz=%d temp=%d\r\n",
-                   imu.accel_x,
-                   imu.accel_y,
-                   imu.accel_z,
-                   imu.gyro_x,
-                   imu.gyro_y,
-                   imu.gyro_z,
-                   imu.temperature);
-    RaspiLink_WriteString(line);
+    RaspiLink_SendImuRaw(imu.accel_x,
+                         imu.accel_y,
+                         imu.accel_z,
+                         imu.gyro_x,
+                         imu.gyro_y,
+                         imu.gyro_z);
+
     DebugUart_PrintfIf(
         DEBUG_LOG_IMU,
         "[IMU] ax=%d ay=%d az=%d gx=%d gy=%d gz=%d temp=%d\r\n",
@@ -140,6 +168,17 @@ static void ReportToHost(const ControlCommand *command)
   }
 }
 
+static void ReportDeviceToHost(void)
+{
+  GamepadState gamepad = {0};
+  UltrasonicSample ultrasonic = {0};
+
+  (void)Gamepad_GetState(&gamepad);
+  (void)Ultrasonic_GetSample(&ultrasonic);
+
+  RaspiLink_SendDeviceStatus(gamepad.connected, g_imu_ok, ultrasonic.valid, 0U);
+}
+
 static void ReportToOled(const ControlCommand *command)
 {
   char line[24];
@@ -149,10 +188,7 @@ static void ReportToOled(const ControlCommand *command)
   (void)Gamepad_GetState(&gamepad);
   (void)Ultrasonic_GetSample(&ultrasonic);
 
-  /*
-   * OLED 只做本地仪表盘，不显示高频原始数据。
-   * 每秒刷新一次，避免占用过多主循环时间。
-   */
+  /* OLED 只显示低频摘要，避免占用主循环时间。 */
   Oled_Clear();
 
   (void)snprintf(line, sizeof(line), "SRC:%s", SourceToText(command->source));

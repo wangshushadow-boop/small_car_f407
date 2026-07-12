@@ -23,7 +23,8 @@
 | 控制仲裁 | `Core/Inc/control_mux.h`、`Core/Src/control_mux.c` | 按安全、手柄、上位机、空闲顺序选择底盘指令。 |
 | USB 手柄 | `Core/Inc/gamepad.h`、`Core/Src/gamepad.c`、`Core/Src/gamepad_usb.c` | 接收 USB 手柄数据，左摇杆输出底盘控制量。 |
 | 手柄舵机控制 | `Core/Inc/gamepad_servo.h`、`Core/Src/gamepad_servo.c` | 右摇杆增量控制两路舵机。 |
-| 上位机/串口命令 | `Core/Inc/host_link.h`、`Core/Src/host_link.c` | 处理串口命令和日志开关；上位机运动协议待扩展。 |
+| 串口1调试命令 | `Core/Inc/host_link.h`、`Core/Src/host_link.c` | 处理串口1文本命令和日志开关。 |
+| 树莓派串口3协议 | `Core/Inc/raspi_link.h`、`Core/Src/raspi_link.c` | 处理串口3二进制协议、状态上报和上位机控制命令。 |
 | 串口调试 | `Core/Inc/debug_uart.h`、`Core/Src/debug_uart.c` | 提供调试输出和模块日志开关。 |
 | 底盘执行 | `Core/Inc/chassis.h`、`Core/Src/chassis.c` | 将前进/转向指令混控为四路电机速度。 |
 | 电机驱动 | `Core/Inc/motor.h`、`Core/Src/motor.c` | 将速度转换为 PWM 占空比和方向输出。 |
@@ -72,7 +73,7 @@ USB 手柄右摇杆
 
 | 扩展项 | 建议 |
 | --- | --- |
-| 上位机控制 | 在 `host_link.c` 中增加稳定的数据帧协议，再接入 `HostLink_GetControlCommand()`。 |
+| 上位机控制 | 已由 `raspi_link.c` 实现串口3二进制协议，并通过 `RaspiLink_GetControlCommand()` 接入控制仲裁。 |
 | 闭环速度控制 | 基于 `encoder.c` 的周期增量增加 PID 层，不建议直接塞进 `motor.c`。 |
 | 多传感器融合 | IMU 原始数据保留在驱动层，姿态解算单独新增模块。 |
 | 任务拆分 | 只有在控制周期、阻塞风险或调试复杂度上升后再拆分任务。 |
@@ -85,4 +86,3 @@ USB 手柄右摇杆
 | 正值 | 正转 |
 | 负值 | 反转 |
 | `0` | 停止 |
-
