@@ -58,6 +58,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/oled.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/raspi_link.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/servo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/system_status.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ultrasonic.c
 )
 

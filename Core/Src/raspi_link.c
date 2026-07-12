@@ -26,13 +26,12 @@ static uint8_t g_rx_ring[RASPI_LINK_RX_RING_SIZE];
 static void ProcessByte(uint8_t data);
 static void ProcessCommand(const char *line);
 static bool PopRxByte(uint8_t *data);
-static void WriteString(const char *text);
 
 void RaspiLink_Init(void)
 {
   DebugUart_WriteString("[RPI] USART3 init\r\n");
-  WriteString("[RPI] USART3 ready, 115200 8N1\r\n");
-  WriteString("[RPI] commands: ping, help, status, echo <text>\r\n");
+  RaspiLink_WriteString("[RPI] USART3 ready, 115200 8N1\r\n");
+  RaspiLink_WriteString("[RPI] commands: ping, help, status, echo <text>\r\n");
   (void)HAL_UART_Receive_IT(&huart3, &g_rx_byte, 1U);
 }
 
@@ -111,7 +110,7 @@ static void ProcessByte(uint8_t data)
   {
     g_line_length = 0U;
     g_last_rx_tick = 0U;
-    WriteString("[RPI] line too long\r\n");
+    RaspiLink_WriteString("[RPI] line too long\r\n");
   }
 }
 
@@ -128,31 +127,31 @@ static void ProcessCommand(const char *line)
 
   if (strcmp(command, "ping") == 0)
   {
-    WriteString("[RPI] pong\r\n");
+    RaspiLink_WriteString("[RPI] pong\r\n");
     return;
   }
 
   if ((strcmp(command, "help") == 0) || (strcmp(command, "?") == 0))
   {
-    WriteString("[RPI] commands: ping, help, status, echo <text>\r\n");
+    RaspiLink_WriteString("[RPI] commands: ping, help, status, echo <text>\r\n");
     return;
   }
 
   if (strcmp(command, "status") == 0)
   {
-    WriteString("[RPI] ok\r\n");
+    RaspiLink_WriteString("[RPI] ok\r\n");
     return;
   }
 
   if (strcmp(command, "echo") == 0)
   {
-    WriteString("[RPI] echo ");
-    WriteString(value);
-    WriteString("\r\n");
+    RaspiLink_WriteString("[RPI] echo ");
+    RaspiLink_WriteString(value);
+    RaspiLink_WriteString("\r\n");
     return;
   }
 
-  WriteString("[RPI] unknown command\r\n");
+  RaspiLink_WriteString("[RPI] unknown command\r\n");
 }
 
 static bool PopRxByte(uint8_t *data)
@@ -167,7 +166,7 @@ static bool PopRxByte(uint8_t *data)
   return true;
 }
 
-static void WriteString(const char *text)
+void RaspiLink_WriteString(const char *text)
 {
   if (text == NULL)
   {

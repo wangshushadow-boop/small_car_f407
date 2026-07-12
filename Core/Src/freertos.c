@@ -1,4 +1,4 @@
-/* USER CODE BEGIN Header */
+﻿/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * File Name          : freertos.c
@@ -32,10 +32,10 @@
 #include "gamepad.h"
 #include "gamepad_servo.h"
 #include "host_link.h"
-#include "icm20948.h"
 #include "oled.h"
 #include "raspi_link.h"
 #include "servo.h"
+#include "system_status.h"
 #include "ultrasonic.h"
 
 /* USER CODE END Includes */
@@ -110,7 +110,7 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_THREADS */
   if (defaultTaskHandle == NULL)
   {
-    /* 任务创建失败通常是堆或栈配置问题。 */
+    /* 浠诲姟鍒涘缓澶辫触閫氬父鏄爢鎴栨爤閰嶇疆闂銆?*/
     DebugUart_WriteStringIf(DEBUG_LOG_RTOS, "[RTOS] defaultTask create failed\r\n");
   }
   else
@@ -138,20 +138,20 @@ void StartDefaultTask(void *argument)
   /* init code for USB_HOST */
   MX_USB_HOST_Init();
   /* USER CODE BEGIN StartDefaultTask */
-  /* FreeRTOS 启动后显示 OLED 启动画面，确认任务已经开始运行。 */
+  /* FreeRTOS 鍚姩鍚庢樉绀?OLED 鍚姩鐢婚潰锛岀‘璁や换鍔″凡缁忓紑濮嬭繍琛屻€?*/
   Oled_ShowBootScreen();
   DebugUart_WriteStringIf(DEBUG_LOG_RTOS, "[RTOS] Default task started\r\n");
   osDelay(1000);
 
-  uint32_t debug_counter = 0U;
   ControlSource last_source = CONTROL_SOURCE_NONE;
+  SystemStatus_Init();
 
   /* Infinite loop */
   for(;;)
   {
     /*
-     * 当前调试阶段使用一个应用任务顺序调度各模块：
-     * 每个 TaskStep 都应尽量短小、非阻塞，避免影响 100ms 主循环节奏。
+     * 褰撳墠璋冭瘯闃舵浣跨敤涓€涓簲鐢ㄤ换鍔￠『搴忚皟搴﹀悇妯″潡锛?
+     * 姣忎釜 TaskStep 閮藉簲灏介噺鐭皬銆侀潪闃诲锛岄伩鍏嶅奖鍝?100ms 涓诲惊鐜妭濂忋€?
      */
     Gamepad_TaskStep();
     GamepadServo_TaskStep();
@@ -161,13 +161,14 @@ void StartDefaultTask(void *argument)
     Encoder_TaskStep();
 
     ControlCommand command;
-    /* 控制仲裁决定底盘最终听谁的命令。 */
+    /* 鎺у埗浠茶鍐冲畾搴曠洏鏈€缁堝惉璋佺殑鍛戒护銆?*/
     (void)ControlMux_SelectCommand(&command);
-    /* 底盘层只关心最终命令，不需要知道命令来自手柄还是上位机。 */
+    /* 搴曠洏灞傚彧鍏冲績鏈€缁堝懡浠わ紝涓嶉渶瑕佺煡閬撳懡浠ゆ潵鑷墜鏌勮繕鏄笂浣嶆満銆?*/
     Chassis_ApplyCommand(&command);
+    SystemStatus_TaskStep(&command);
     if (command.source != last_source)
     {
-      /* 控制源变化时打印一次，便于判断是否被安全保护或手柄接管。 */
+      /* 鎺у埗婧愬彉鍖栨椂鎵撳嵃涓€娆★紝渚夸簬鍒ゆ柇鏄惁琚畨鍏ㄤ繚鎶ゆ垨鎵嬫焺鎺ョ銆?*/
       DebugUart_PrintfIf(DEBUG_LOG_CONTROL,
                          "[CTRL] source=%d enabled=%d\r\n",
                          command.source,
@@ -175,48 +176,7 @@ void StartDefaultTask(void *argument)
       last_source = command.source;
     }
 
-    if ((debug_counter % 5U) == 0U)
-    {
-      /* 主循环 100ms 一次，这里每 5 次打印一次，也就是约 500ms。 */
-      Icm20948Sample sample;
-      Icm20948Status imu_status = Icm20948_ReadSample(&sample);
-      if (imu_status == ICM20948_STATUS_OK)
-      {
-        DebugUart_PrintfIf(
-            DEBUG_LOG_IMU,
-            "[IMU] ax=%d ay=%d az=%d gx=%d gy=%d gz=%d temp=%d\r\n",
-            sample.accel_x,
-            sample.accel_y,
-            sample.accel_z,
-            sample.gyro_x,
-            sample.gyro_y,
-            sample.gyro_z,
-            sample.temperature);
-      }
-      else
-      {
-        DebugUart_PrintfIf(DEBUG_LOG_IMU, "[IMU] read failed, status=%d\r\n", imu_status);
-      }
-
-      EncoderSample encoder_a = Encoder_GetSample(MOTOR_A);
-      EncoderSample encoder_b = Encoder_GetSample(MOTOR_B);
-      EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
-      EncoderSample encoder_d = Encoder_GetSample(MOTOR_D);
-      DebugUart_PrintfIf(
-          DEBUG_LOG_ENCODER,
-          "[ENC] A=%ld/%d B=%ld/%d C=%ld/%d D=%ld/%d\r\n",
-          encoder_a.count,
-          encoder_a.delta,
-          encoder_b.count,
-          encoder_b.delta,
-          encoder_c.count,
-          encoder_c.delta,
-          encoder_d.count,
-          encoder_d.delta);
-    }
-
-    ++debug_counter;
-    /* 主循环周期。后续做闭环控制时，可以根据需要缩短周期或拆分任务。 */
+    /* 涓诲惊鐜懆鏈熴€傚悗缁仛闂幆鎺у埗鏃讹紝鍙互鏍规嵁闇€瑕佺缉鐭懆鏈熸垨鎷嗗垎浠诲姟銆?*/
     osDelay(100);
   }
   /* USER CODE END StartDefaultTask */
