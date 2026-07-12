@@ -165,6 +165,12 @@ static void ProcessCommand(const char *line)
     return;
   }
 
+  if (strcmp(command, "ping") == 0)
+  {
+    DebugUart_WriteString("[CMD] pong\r\n");
+    return;
+  }
+
   if (strcmp(command, "status") == 0)
   {
     PrintLogStatus();
@@ -249,7 +255,7 @@ static bool SetLogSwitch(const char *name, const char *action, uint32_t category
 static void PrintLogHelp(void)
 {
   DebugUart_WriteString(
-      "[CMD] commands: imu on/off, pad on/off, servo on/off, motor on/off, ultra on/off, status, help\r\n");
+      "[CMD] commands: ping, imu on/off, pad on/off, servo on/off, motor on/off, ultra on/off, status, help\r\n");
 }
 
 static void PrintLogStatus(void)

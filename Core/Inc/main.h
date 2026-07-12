@@ -77,6 +77,10 @@ void Error_Handler(void);
 #define OLED_SCL_GPIO_Port GPIOB
 #define OLED_SDA_Pin GPIO_PIN_11
 #define OLED_SDA_GPIO_Port GPIOB
+#define USART3_TX_Pin GPIO_PIN_8
+#define USART3_TX_GPIO_Port GPIOD
+#define USART3_RX_Pin GPIO_PIN_9
+#define USART3_RX_GPIO_Port GPIOD
 #define MOTOR_A_ENC_A_Pin GPIO_PIN_15
 #define MOTOR_A_ENC_A_GPIO_Port GPIOA
 #define ULTRASONIC_TRIG_Pin GPIO_PIN_12

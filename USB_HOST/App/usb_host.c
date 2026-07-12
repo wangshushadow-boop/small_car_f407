@@ -73,22 +73,22 @@ void MX_USB_HOST_Init(void)
   DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] host init begin\r\n");
   if (USBH_Init(&hUsbHostFS, USBH_UserProcess, HOST_FS) != USBH_OK)
   {
-    DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] USBH_Init failed\r\n");
+    DebugUart_WriteString("[USB] USBH_Init failed\r\n");
     Error_Handler();
   }
   if (USBH_RegisterClass(&hUsbHostFS, &GamepadUsbHidClass) != USBH_OK)
   {
-    DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] register HID class failed\r\n");
+    DebugUart_WriteString("[USB] register HID class failed\r\n");
     Error_Handler();
   }
   if (USBH_RegisterClass(&hUsbHostFS, &GamepadUsbVendorHidClass) != USBH_OK)
   {
-    DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] register vendor class failed\r\n");
+    DebugUart_WriteString("[USB] register vendor class failed\r\n");
     Error_Handler();
   }
   if (USBH_Start(&hUsbHostFS) != USBH_OK)
   {
-    DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] USBH_Start failed\r\n");
+    DebugUart_WriteString("[USB] USBH_Start failed\r\n");
     Error_Handler();
   }
   DebugUart_WriteStringIf(DEBUG_LOG_USB, "[USB] host init ok\r\n");
