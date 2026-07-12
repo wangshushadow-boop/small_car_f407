@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "host_link.h"
+#include "ultrasonic.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -213,6 +214,11 @@ void USART1_IRQHandler(void)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   HostLink_OnUartRxCpltCallback(huart);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  Ultrasonic_OnEchoEdge(GPIO_Pin);
 }
 
 /* USER CODE END 1 */

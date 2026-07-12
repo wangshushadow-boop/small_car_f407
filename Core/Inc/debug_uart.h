@@ -18,6 +18,7 @@ typedef enum {
   DEBUG_LOG_CONTROL = 1U << 7,
   DEBUG_LOG_MOTOR = 1U << 8,
   DEBUG_LOG_SERVO = 1U << 9,
+  DEBUG_LOG_ULTRASONIC = 1U << 10,
 } DebugLogCategory;
 
 void DebugUart_Init(void);

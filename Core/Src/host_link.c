@@ -173,6 +173,12 @@ static void ProcessCommand(const char *line)
     return;
   }
 
+  if (strcmp(command, "ultra") == 0)
+  {
+    SetLogSwitch("ultra", action, DEBUG_LOG_ULTRASONIC);
+    return;
+  }
+
   DebugUart_WriteString("[CMD] unknown command\r\n");
   PrintLogHelp();
 }
@@ -218,14 +224,16 @@ static bool SetLogSwitch(const char *name, const char *action, uint32_t category
 
 static void PrintLogHelp(void)
 {
-  DebugUart_WriteString("[CMD] commands: imu on/off, pad on/off, servo on/off, motor on/off, status, help\r\n");
+  DebugUart_WriteString(
+      "[CMD] commands: imu on/off, pad on/off, servo on/off, motor on/off, ultra on/off, status, help\r\n");
 }
 
 static void PrintLogStatus(void)
 {
-  DebugUart_Printf("[CMD] imu=%s pad=%s servo=%s motor=%s\r\n",
+  DebugUart_Printf("[CMD] imu=%s pad=%s servo=%s motor=%s ultra=%s\r\n",
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_IMU)),
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_GAMEPAD_DATA)),
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_SERVO)),
-                   BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_MOTOR)));
+                   BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_MOTOR)),
+                   BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_ULTRASONIC)));
 }
