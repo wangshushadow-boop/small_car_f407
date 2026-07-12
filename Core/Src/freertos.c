@@ -109,6 +109,7 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_THREADS */
   if (defaultTaskHandle == NULL)
   {
+    /* 任务创建失败通常是堆或栈配置问题。 */
     DebugUart_WriteStringIf(DEBUG_LOG_RTOS, "[RTOS] defaultTask create failed\r\n");
   }
   else
@@ -136,6 +137,7 @@ void StartDefaultTask(void *argument)
   /* init code for USB_HOST */
   MX_USB_HOST_Init();
   /* USER CODE BEGIN StartDefaultTask */
+  /* FreeRTOS 启动后显示 OLED 启动画面，确认任务已经开始运行。 */
   Oled_ShowBootScreen();
   DebugUart_WriteStringIf(DEBUG_LOG_RTOS, "[RTOS] Default task started\r\n");
   osDelay(1000);
@@ -146,6 +148,10 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
+    /*
+     * 当前调试阶段使用一个应用任务顺序调度各模块：
+     * 每个 TaskStep 都应尽量短小、非阻塞，避免影响 100ms 主循环节奏。
+     */
     Gamepad_TaskStep();
     GamepadServo_TaskStep();
     HostLink_TaskStep();
@@ -153,10 +159,13 @@ void StartDefaultTask(void *argument)
     Encoder_TaskStep();
 
     ControlCommand command;
+    /* 控制仲裁决定底盘最终听谁的命令。 */
     (void)ControlMux_SelectCommand(&command);
+    /* 底盘层只关心最终命令，不需要知道命令来自手柄还是上位机。 */
     Chassis_ApplyCommand(&command);
     if (command.source != last_source)
     {
+      /* 控制源变化时打印一次，便于判断是否被安全保护或手柄接管。 */
       DebugUart_PrintfIf(DEBUG_LOG_CONTROL,
                          "[CTRL] source=%d enabled=%d\r\n",
                          command.source,
@@ -166,6 +175,7 @@ void StartDefaultTask(void *argument)
 
     if ((debug_counter % 5U) == 0U)
     {
+      /* 主循环 100ms 一次，这里每 5 次打印一次，也就是约 500ms。 */
       Icm20948Sample sample;
       Icm20948Status imu_status = Icm20948_ReadSample(&sample);
       if (imu_status == ICM20948_STATUS_OK)
@@ -204,6 +214,7 @@ void StartDefaultTask(void *argument)
     }
 
     ++debug_counter;
+    /* 主循环周期。后续做闭环控制时，可以根据需要缩短周期或拆分任务。 */
     osDelay(100);
   }
   /* USER CODE END StartDefaultTask */

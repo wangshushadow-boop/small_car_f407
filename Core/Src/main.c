@@ -116,9 +116,16 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+  /*
+   * 业务模块初始化顺序：
+   * 1. 先初始化调试串口，后续模块可以输出错误和状态。
+   * 2. 再初始化传感器和执行机构。
+   * 3. 最后初始化输入、命令和控制仲裁模块。
+   */
   DebugUart_Init();
   DebugUart_WriteStringIf(DEBUG_LOG_BOOT, "\r\n[BOOT] Debug UART1 ready, 115200 8N1\r\n");
   Oled_Init();
+  /* IMU 初始化状态会打印出来，status=0 表示初始化成功。 */
   Icm20948Status imu_status = Icm20948_Init();
   DebugUart_PrintfIf(DEBUG_LOG_BOOT, "[BOOT] ICM20948 init status=%d\r\n", imu_status);
   Motor_Init();
@@ -126,6 +133,7 @@ int main(void)
   Chassis_Init();
   Servo_Init();
   Ultrasonic_Init();
+  /* 手柄和串口命令都只是控制入口，真正的底盘输出由 control_mux 仲裁。 */
   Gamepad_Init();
   GamepadServo_Init();
   HostLink_Init();

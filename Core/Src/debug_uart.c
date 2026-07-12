@@ -9,6 +9,7 @@
 
 #define DEBUG_UART_TX_TIMEOUT_MS 100U
 
+/* 默认关闭所有分类日志，用户通过串口命令手动打开需要观察的模块。 */
 static uint32_t g_log_mask = 0U;
 
 void DebugUart_Init(void)
@@ -23,6 +24,10 @@ void DebugUart_Write(const uint8_t *data, size_t length)
     return;
   }
 
+  /*
+   * 当前调试口输出使用阻塞发送，代码简单、可靠。
+   * 注意不要在高频中断里调用打印函数，避免阻塞系统。
+   */
   (void)HAL_UART_Transmit(&huart1, (uint8_t *)data, (uint16_t)length, DEBUG_UART_TX_TIMEOUT_MS);
 }
 
@@ -38,6 +43,7 @@ void DebugUart_WriteString(const char *text)
 
 void DebugUart_Printf(const char *format, ...)
 {
+  /* 小缓冲区足够调试日志使用，超长日志会被截断，避免栈占用过大。 */
   char buffer[128];
   va_list args;
 
@@ -66,6 +72,7 @@ void DebugUart_Printf(const char *format, ...)
 
 void DebugUart_WriteStringIf(uint32_t category, const char *text)
 {
+  /* 分类日志统一从这里判断开关，便于运行时通过串口命令控制输出量。 */
   if (!DebugUart_IsLogEnabled(category))
   {
     return;
@@ -103,6 +110,7 @@ void DebugUart_PrintfIf(uint32_t category, const char *format, ...)
 
 void DebugUart_SetLogEnabled(uint32_t category, bool enabled)
 {
+  /* 每个日志分类对应 g_log_mask 中的一位。 */
   if (enabled)
   {
     g_log_mask |= category;
@@ -130,6 +138,7 @@ bool DebugUart_IsLogEnabled(uint32_t category)
 
 int __io_putchar(int ch)
 {
+  /* printf 重定向入口：标准库 printf 最终会走到这里。 */
   uint8_t data = (uint8_t)ch;
   DebugUart_Write(&data, 1U);
   return ch;

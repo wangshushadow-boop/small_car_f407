@@ -68,6 +68,12 @@ static USBH_StatusTypeDef GamepadUsb_InterfaceInit(USBH_HandleTypeDef *phost)
   uint8_t max_ep;
   uint8_t interface;
 
+  /*
+   * 厂家 USB 接收器有两种模式：
+   * - PC 模式：标准 HID class 设备。
+   * - Android/XInput 类模式：vendor class 设备。
+   * 这里先按 vendor class 查找接口，后面再用 VID/PID 判断是否支持。
+   */
   interface = USBH_FindInterface(phost, GAMEPAD_VENDOR_CLASS_CODE, GAMEPAD_VENDOR_CLASS_CODE,
                                  GAMEPAD_VENDOR_CLASS_CODE);
   if ((interface == 0xFFU) || (interface >= USBH_MAX_NUM_INTERFACES))
@@ -111,6 +117,7 @@ static USBH_StatusTypeDef GamepadUsb_InterfaceInit(USBH_HandleTypeDef *phost)
     return USBH_FAIL;
   }
 
+  /* 复用 ST HID_HandleTypeDef，让 USB Host 状态机仍然按 HID 中断端点收包。 */
   (void)USBH_memset(hid_handle, 0, sizeof(HID_HandleTypeDef));
   hid_handle->state = USBH_HID_INIT;
   hid_handle->ctl_state = USBH_HID_REQ_INIT;
@@ -136,6 +143,7 @@ static USBH_StatusTypeDef GamepadUsb_InterfaceInit(USBH_HandleTypeDef *phost)
 
   for (uint8_t num = 0U; num < max_ep; ++num)
   {
+    /* 找到 IN/OUT 中断端点。当前主要使用 IN 端点读取手柄报文。 */
     const uint8_t ep_addr = phost->device.CfgDesc.Itf_Desc[interface].Ep_Desc[num].bEndpointAddress;
     ep_mps = phost->device.CfgDesc.Itf_Desc[interface].Ep_Desc[num].wMaxPacketSize;
     if ((ep_addr & 0x80U) != 0U)
@@ -164,6 +172,7 @@ static USBH_StatusTypeDef GamepadUsb_InterfaceInit(USBH_HandleTypeDef *phost)
 
 static USBH_StatusTypeDef GamepadUsb_InterfaceDeInit(USBH_HandleTypeDef *phost)
 {
+  /* USB 断开时释放管道和 HID 句柄，并把手柄状态复位为未连接。 */
   HID_HandleTypeDef *hid_handle = (HID_HandleTypeDef *)phost->pActiveClass->pData;
 
   if (hid_handle != NULL)
@@ -200,6 +209,7 @@ static USBH_StatusTypeDef GamepadUsb_ClassRequest(USBH_HandleTypeDef *phost)
   {
     case USBH_HID_REQ_INIT:
     case USBH_HID_REQ_GET_HID_DESC:
+      /* 从配置描述符里解析 HID 描述符，获取报告描述符长度。 */
       GamepadUsb_ParseHidDesc(&hid_handle->HID_Desc, phost->device.CfgDesc_Raw);
       hid_handle->ctl_state = USBH_HID_REQ_GET_REPORT_DESC;
       break;
@@ -229,6 +239,7 @@ static USBH_StatusTypeDef GamepadUsb_ClassRequest(USBH_HandleTypeDef *phost)
       class_req_status = USBH_HID_SetProtocol(phost, 0U);
       if ((class_req_status == USBH_OK) || (class_req_status == USBH_NOT_SUPPORTED))
       {
+        /* 类请求完成后通知 USB Host：当前类已经可用。 */
         hid_handle->ctl_state = USBH_HID_REQ_IDLE;
         phost->pUser(phost, HOST_USER_CLASS_ACTIVE);
         status = USBH_OK;
@@ -291,6 +302,7 @@ static USBH_StatusTypeDef GamepadUsb_Process(USBH_HandleTypeDef *phost)
       break;
 
     case USBH_HID_GET_DATA:
+      /* 发起一次中断 IN 传输，等待手柄报告数据。 */
       (void)USBH_InterruptReceiveData(phost, hid_handle->pData, (uint8_t)hid_handle->length,
                                       hid_handle->InPipe);
       hid_handle->state = USBH_HID_POLL;
@@ -301,6 +313,7 @@ static USBH_StatusTypeDef GamepadUsb_Process(USBH_HandleTypeDef *phost)
     case USBH_HID_POLL:
       if (USBH_LL_GetURBState(phost, hid_handle->InPipe) == USBH_URB_DONE)
       {
+        /* 收到完整报文后写入 FIFO，再触发解码回调。 */
         uint32_t xfer_size = USBH_LL_GetLastXferSize(phost, hid_handle->InPipe);
         if ((hid_handle->DataReady == 0U) && (xfer_size != 0U) && (hid_handle->fifo.buf != NULL))
         {
@@ -330,6 +343,7 @@ static USBH_StatusTypeDef GamepadUsb_Process(USBH_HandleTypeDef *phost)
 
 static USBH_StatusTypeDef GamepadUsb_SOFProcess(USBH_HandleTypeDef *phost)
 {
+  /* 按端点 bInterval 控制轮询频率，避免过快重复提交 IN 传输。 */
   HID_HandleTypeDef *hid_handle = (HID_HandleTypeDef *)phost->pActiveClass->pData;
   if ((hid_handle != NULL) && (hid_handle->state == USBH_HID_POLL) &&
       ((phost->Timer - hid_handle->timer) >= hid_handle->poll))
@@ -344,6 +358,7 @@ static USBH_StatusTypeDef GamepadUsb_SOFProcess(USBH_HandleTypeDef *phost)
 
 static void GamepadUsb_ParseHidDesc(HID_DescTypeDef *desc, uint8_t *buf)
 {
+  /* 在配置描述符中查找 HID 描述符；部分手柄类请求会用到报告描述符长度。 */
   USBH_DescHeader_t *pdesc = (USBH_DescHeader_t *)buf;
   uint16_t cfg_desc_len = LE16(buf + 2U);
   uint16_t ptr = USB_LEN_CFG_DESC;
@@ -368,6 +383,7 @@ static void GamepadUsb_ParseHidDesc(HID_DescTypeDef *desc, uint8_t *buf)
 
 static USBH_StatusTypeDef GamepadUsb_ReportInit(USBH_HandleTypeDef *phost)
 {
+  /* 报文缓冲区固定为 64 字节，超过则截断，防止越界。 */
   HID_HandleTypeDef *hid_handle = (HID_HandleTypeDef *)phost->pActiveClass->pData;
   if (hid_handle->length > GAMEPAD_REPORT_BUFFER_SIZE)
   {
@@ -397,6 +413,7 @@ void USBH_HID_EventCallback(USBH_HandleTypeDef *phost)
 
 static USBH_StatusTypeDef GamepadUsb_DecodeReport(USBH_HandleTypeDef *phost)
 {
+  /* 从 HID FIFO 中取出一帧报告，然后根据接收器模式选择不同解码方式。 */
   HID_HandleTypeDef *hid_handle = (HID_HandleTypeDef *)phost->pActiveClass->pData;
   if ((hid_handle == NULL) || (hid_handle->length == 0U) || (hid_handle->fifo.buf == NULL))
   {
@@ -426,6 +443,12 @@ static USBH_StatusTypeDef GamepadUsb_DecodeReport(USBH_HandleTypeDef *phost)
 
 static void DecodeWheeltecPcReport(const uint8_t *data)
 {
+  /*
+   * PC 模式报文：
+   * - data[0]/data[1] 保存大部分按键位。
+   * - data[2] 低 4 位是方向帽。
+   * - data[3..6] 是 LX/LY/RX/RY。
+   */
   uint16_t buttons = 0U;
 
   SetButton(&buttons, (data[1] >> 0) & 0x01U, GAMEPAD_BUTTON_SELECT);
@@ -444,6 +467,7 @@ static void DecodeWheeltecPcReport(const uint8_t *data)
   uint8_t hat = data[2] & 0x0FU;
   if (hat != 0x0FU)
   {
+    /* 方向帽支持斜向，这里拆成上下左右四个独立按键。 */
     const uint8_t diagonal = hat & 0x01U;
     const uint8_t direction = (hat >> 1) & 0x03U;
     SetButton(&buttons, (direction == 0U) || (diagonal && (direction == 3U)), GAMEPAD_BUTTON_UP);
@@ -457,6 +481,10 @@ static void DecodeWheeltecPcReport(const uint8_t *data)
 
 static void DecodeWheeltecAndroidReport(const uint8_t *data)
 {
+  /*
+   * Android/XInput 类模式下，部分摇杆空闲值会读到 0。
+   * 如果高低字节都为 0，则按中心值 128 处理，避免误判为打满方向。
+   */
   const uint8_t lx = ((data[6] == 0U) && (data[7] == 0U)) ? 128U : data[6];
   const uint8_t ly = 255U - (((data[8] == 0U) && (data[9] == 0U)) ? 128U : data[8]);
   const uint8_t rx = ((data[10] == 0U) && (data[11] == 0U)) ? 128U : data[10];
@@ -485,6 +513,7 @@ static void DecodeWheeltecAndroidReport(const uint8_t *data)
 
 static void SetButton(uint16_t *buttons, uint8_t pressed, GamepadButton button)
 {
+  /* 把不同报文里的按键位统一映射到 GamepadButton 位图。 */
   if (pressed != 0U)
   {
     *buttons |= (uint16_t)(1UL << (uint8_t)button);
@@ -497,6 +526,7 @@ static void SetButton(uint16_t *buttons, uint8_t pressed, GamepadButton button)
 
 static bool IsWheeltecUsbGamepad(USBH_HandleTypeDef *phost)
 {
+  /* 只支持当前项目验证过的厂家 USB 接收器 VID/PID。 */
   if ((phost->device.DevDesc.idVendor == WHEELTEC_USB_GAMEPAD_PC_VID) &&
       (phost->device.DevDesc.idProduct == WHEELTEC_USB_GAMEPAD_PC_PID))
   {
@@ -517,6 +547,7 @@ static bool IsWheeltecUsbGamepad(USBH_HandleTypeDef *phost)
 
 static void ResetGamepad(void)
 {
+  /* USB 断开后恢复为未连接和摇杆居中，避免保留最后一次控制量。 */
   g_gamepad_mode = GAMEPAD_USB_MODE_UNKNOWN;
   Gamepad_UpdateFromUsb(false,
                         GAMEPAD_DEFAULT_AXIS,
