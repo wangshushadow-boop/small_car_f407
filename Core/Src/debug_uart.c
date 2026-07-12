@@ -9,9 +9,7 @@
 
 #define DEBUG_UART_TX_TIMEOUT_MS 100U
 
-static uint32_t g_log_mask = DEBUG_LOG_BOOT | DEBUG_LOG_RTOS | DEBUG_LOG_USB | DEBUG_LOG_GAMEPAD |
-                             DEBUG_LOG_GAMEPAD_DATA | DEBUG_LOG_IMU | DEBUG_LOG_MOTOR |
-                             DEBUG_LOG_SERVO | DEBUG_LOG_ULTRASONIC;
+static uint32_t g_log_mask = 0U;
 
 void DebugUart_Init(void)
 {
