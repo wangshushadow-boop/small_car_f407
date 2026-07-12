@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "host_link.h"
+#include "raspi_link.h"
 #include "ultrasonic.h"
 /* USER CODE END Includes */
 
@@ -58,6 +59,7 @@
 
 /* External variables --------------------------------------------------------*/
 extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
+extern UART_HandleTypeDef huart3;
 extern TIM_HandleTypeDef htim6;
 
 /* USER CODE BEGIN EV */
@@ -206,6 +208,11 @@ void OTG_FS_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+void USART3_IRQHandler(void)
+{
+  HAL_UART_IRQHandler(&huart3);
+}
+
 void USART1_IRQHandler(void)
 {
   HAL_UART_IRQHandler(&huart1);
@@ -214,6 +221,7 @@ void USART1_IRQHandler(void)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   HostLink_OnUartRxCpltCallback(huart);
+  RaspiLink_OnUartRxCpltCallback(huart);
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)

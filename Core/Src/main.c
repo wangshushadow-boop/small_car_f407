@@ -37,6 +37,7 @@
 #include "icm20948.h"
 #include "motor.h"
 #include "oled.h"
+#include "raspi_link.h"
 #include "servo.h"
 #include "ultrasonic.h"
 
@@ -115,6 +116,7 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_TIM5_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
   /*
    * 业务模块初始化顺序：
@@ -137,6 +139,7 @@ int main(void)
   Gamepad_Init();
   GamepadServo_Init();
   HostLink_Init();
+  RaspiLink_Init();
   ControlMux_Init();
 
   /* USER CODE END 2 */

@@ -34,6 +34,7 @@
 #include "host_link.h"
 #include "icm20948.h"
 #include "oled.h"
+#include "raspi_link.h"
 #include "servo.h"
 #include "ultrasonic.h"
 
@@ -155,6 +156,7 @@ void StartDefaultTask(void *argument)
     Gamepad_TaskStep();
     GamepadServo_TaskStep();
     HostLink_TaskStep();
+    RaspiLink_TaskStep();
     Ultrasonic_TaskStep();
     Encoder_TaskStep();
 
