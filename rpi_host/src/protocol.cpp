@@ -1,0 +1,302 @@
+#include "small_car_host/protocol.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <iterator>
+#include <stdexcept>
+
+namespace small_car {
+namespace {
+
+constexpr std::size_t kHeaderSize = 6;
+constexpr std::size_t kMinFrameSize = 8;
+constexpr std::uint8_t kSyncBytes[] = {kSync0, kSync1};
+
+void PutU16(std::vector<std::uint8_t>* data, std::uint16_t value) {
+  data->push_back(static_cast<std::uint8_t>(value & 0xFF));
+  data->push_back(static_cast<std::uint8_t>((value >> 8) & 0xFF));
+}
+
+void PutI16(std::vector<std::uint8_t>* data, std::int16_t value) {
+  PutU16(data, static_cast<std::uint16_t>(value));
+}
+
+void PutU32(std::vector<std::uint8_t>* data, std::uint32_t value) {
+  data->push_back(static_cast<std::uint8_t>(value & 0xFF));
+  data->push_back(static_cast<std::uint8_t>((value >> 8) & 0xFF));
+  data->push_back(static_cast<std::uint8_t>((value >> 16) & 0xFF));
+  data->push_back(static_cast<std::uint8_t>((value >> 24) & 0xFF));
+}
+
+std::uint16_t ReadU16(const std::vector<std::uint8_t>& data, std::size_t offset) {
+  return static_cast<std::uint16_t>(data[offset]) |
+         (static_cast<std::uint16_t>(data[offset + 1]) << 8);
+}
+
+std::int16_t ReadI16(const std::vector<std::uint8_t>& data, std::size_t offset) {
+  return static_cast<std::int16_t>(ReadU16(data, offset));
+}
+
+std::uint32_t ReadU32(const std::vector<std::uint8_t>& data, std::size_t offset) {
+  return static_cast<std::uint32_t>(data[offset]) |
+         (static_cast<std::uint32_t>(data[offset + 1]) << 8) |
+         (static_cast<std::uint32_t>(data[offset + 2]) << 16) |
+         (static_cast<std::uint32_t>(data[offset + 3]) << 24);
+}
+
+void RequirePayloadSize(const std::vector<std::uint8_t>& payload, std::size_t size) {
+  if (payload.size() != size) {
+    throw std::runtime_error("payload size mismatch");
+  }
+}
+
+std::int16_t ClampControl(std::int16_t value) {
+  return std::clamp<std::int16_t>(value, -1000, 1000);
+}
+
+void DropNoise(std::vector<std::uint8_t>* buffer) {
+  if (!buffer->empty() && buffer->back() == kSync0) {
+    const std::uint8_t tail = buffer->back();
+    buffer->clear();
+    buffer->push_back(tail);
+  } else {
+    buffer->clear();
+  }
+}
+
+}  // namespace
+
+std::uint16_t Crc16CcittFalse(const std::uint8_t* data, std::size_t size) {
+  std::uint16_t crc = 0xFFFF;
+  for (std::size_t i = 0; i < size; ++i) {
+    crc ^= static_cast<std::uint16_t>(data[i]) << 8;
+    for (int bit = 0; bit < 8; ++bit) {
+      if ((crc & 0x8000) != 0) {
+        crc = static_cast<std::uint16_t>((crc << 1) ^ 0x1021);
+      } else {
+        crc = static_cast<std::uint16_t>(crc << 1);
+      }
+    }
+  }
+  return crc;
+}
+
+std::uint16_t Crc16CcittFalse(const std::vector<std::uint8_t>& data) {
+  return Crc16CcittFalse(data.data(), data.size());
+}
+
+std::uint32_t NowMs() {
+  const auto now = std::chrono::steady_clock::now().time_since_epoch();
+  return static_cast<std::uint32_t>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+}
+
+std::vector<std::uint8_t> EncodeFrame(std::uint8_t msg,
+                                      std::uint8_t seq,
+                                      const std::vector<std::uint8_t>& payload) {
+  if (payload.size() > kMaxPayloadSize) {
+    throw std::runtime_error("payload too large");
+  }
+
+  std::vector<std::uint8_t> frame;
+  frame.reserve(kMinFrameSize + payload.size());
+  frame.push_back(kSync0);
+  frame.push_back(kSync1);
+  frame.push_back(kProtocolVersion);
+  frame.push_back(msg);
+  frame.push_back(seq);
+  frame.push_back(static_cast<std::uint8_t>(payload.size()));
+  frame.insert(frame.end(), payload.begin(), payload.end());
+
+  // CRC covers VER through PAYLOAD, excluding AA 55.
+  const std::uint16_t crc = Crc16CcittFalse(frame.data() + 2, frame.size() - 2);
+  PutU16(&frame, crc);
+  return frame;
+}
+
+std::vector<std::uint8_t> MakeHeartbeatFrame(std::uint8_t seq,
+                                             std::uint32_t host_time_ms) {
+  std::vector<std::uint8_t> payload;
+  PutU32(&payload, host_time_ms);
+  return EncodeFrame(static_cast<std::uint8_t>(Msg::kHeartbeat), seq, payload);
+}
+
+std::vector<std::uint8_t> MakeStopFrame(std::uint8_t seq, std::uint32_t host_time_ms) {
+  std::vector<std::uint8_t> payload;
+  PutU32(&payload, host_time_ms);
+  payload.push_back(static_cast<std::uint8_t>(ControlMode::kStop));
+  payload.push_back(0);
+  PutI16(&payload, 0);
+  PutI16(&payload, 0);
+  return EncodeFrame(static_cast<std::uint8_t>(Msg::kControl), seq, payload);
+}
+
+std::vector<std::uint8_t> MakeDriveFrame(std::uint8_t seq,
+                                         std::int16_t forward,
+                                         std::int16_t turn,
+                                         std::uint32_t host_time_ms) {
+  std::vector<std::uint8_t> payload;
+  PutU32(&payload, host_time_ms);
+  payload.push_back(static_cast<std::uint8_t>(ControlMode::kVelocity));
+  payload.push_back(1);
+  PutI16(&payload, ClampControl(forward));
+  PutI16(&payload, ClampControl(turn));
+  return EncodeFrame(static_cast<std::uint8_t>(Msg::kControl), seq, payload);
+}
+
+std::vector<std::uint8_t> MakeServoFrame(std::uint8_t seq,
+                                         std::uint16_t left_us,
+                                         std::uint16_t right_us,
+                                         std::uint32_t host_time_ms) {
+  std::vector<std::uint8_t> payload;
+  PutU32(&payload, host_time_ms);
+  PutU16(&payload, left_us);
+  PutU16(&payload, right_us);
+  return EncodeFrame(static_cast<std::uint8_t>(Msg::kServo), seq, payload);
+}
+
+std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
+  const auto& payload = frame.payload;
+  switch (static_cast<Msg>(frame.msg)) {
+    case Msg::kChassisStatus: {
+      RequirePayloadSize(payload, 12);
+      return ChassisStatus{
+          ReadU32(payload, 0),
+          payload[4],
+          payload[5] != 0,
+          ReadI16(payload, 6),
+          ReadI16(payload, 8),
+          ReadI16(payload, 10),
+      };
+    }
+    case Msg::kEncoderDelta: {
+      RequirePayloadSize(payload, 12);
+      return EncoderDelta{
+          ReadU32(payload, 0),
+          ReadI16(payload, 4),
+          ReadI16(payload, 6),
+          ReadI16(payload, 8),
+          ReadI16(payload, 10),
+      };
+    }
+    case Msg::kImuRaw: {
+      RequirePayloadSize(payload, 16);
+      return ImuRaw{
+          ReadU32(payload, 0),
+          ReadI16(payload, 4),
+          ReadI16(payload, 6),
+          ReadI16(payload, 8),
+          ReadI16(payload, 10),
+          ReadI16(payload, 12),
+          ReadI16(payload, 14),
+      };
+    }
+    case Msg::kDeviceStatus: {
+      RequirePayloadSize(payload, 8);
+      return DeviceStatus{
+          ReadU32(payload, 0),
+          payload[4] != 0,
+          payload[5] != 0,
+          payload[6] != 0,
+          payload[7],
+      };
+    }
+    case Msg::kAck: {
+      RequirePayloadSize(payload, 3);
+      return Ack{payload[0], payload[1], payload[2]};
+    }
+    default:
+      return std::nullopt;
+  }
+}
+
+std::vector<Frame> FrameParser::Feed(const std::uint8_t* data, std::size_t size) {
+  if (data == nullptr || size == 0) {
+    return {};
+  }
+
+  buffer_.insert(buffer_.end(), data, data + size);
+
+  std::vector<Frame> frames;
+  while (true) {
+    auto sync = std::search(buffer_.begin(), buffer_.end(), std::begin(kSyncBytes),
+                            std::end(kSyncBytes));
+    if (sync == buffer_.end()) {
+      DropNoise(&buffer_);
+      break;
+    }
+    if (sync != buffer_.begin()) {
+      buffer_.erase(buffer_.begin(), sync);
+    }
+    if (buffer_.size() < kMinFrameSize) {
+      break;
+    }
+
+    const std::uint8_t version = buffer_[2];
+    const std::uint8_t msg = buffer_[3];
+    const std::uint8_t seq = buffer_[4];
+    const std::uint8_t length = buffer_[5];
+    if (length > kMaxPayloadSize) {
+      buffer_.erase(buffer_.begin());
+      continue;
+    }
+
+    const std::size_t frame_size = kHeaderSize + length + 2;
+    if (buffer_.size() < frame_size) {
+      break;
+    }
+
+    const std::uint16_t expected_crc = ReadU16(buffer_, kHeaderSize + length);
+    const std::uint16_t actual_crc =
+        Crc16CcittFalse(buffer_.data() + 2, 4 + length);
+
+    if (version == kProtocolVersion && expected_crc == actual_crc) {
+      Frame frame;
+      frame.msg = msg;
+      frame.seq = seq;
+      frame.payload.assign(buffer_.begin() + kHeaderSize,
+                           buffer_.begin() + kHeaderSize + length);
+      frames.push_back(std::move(frame));
+    }
+
+    buffer_.erase(buffer_.begin(), buffer_.begin() + frame_size);
+  }
+
+  return frames;
+}
+
+std::vector<Frame> FrameParser::Feed(const std::vector<std::uint8_t>& data) {
+  if (data.empty()) {
+    return {};
+  }
+  return Feed(data.data(), data.size());
+}
+
+void FrameParser::Reset() {
+  buffer_.clear();
+}
+
+std::vector<std::uint8_t> PacketCodec::Heartbeat() {
+  return MakeHeartbeatFrame(NextSeq());
+}
+
+std::vector<std::uint8_t> PacketCodec::Stop() {
+  return MakeStopFrame(NextSeq());
+}
+
+std::vector<std::uint8_t> PacketCodec::Drive(std::int16_t forward, std::int16_t turn) {
+  return MakeDriveFrame(NextSeq(), forward, turn);
+}
+
+std::vector<std::uint8_t> PacketCodec::Servo(std::uint16_t left_us,
+                                             std::uint16_t right_us) {
+  return MakeServoFrame(NextSeq(), left_us, right_us);
+}
+
+std::uint8_t PacketCodec::NextSeq() {
+  const std::uint8_t seq = seq_;
+  seq_ = static_cast<std::uint8_t>(seq_ + 1);
+  return seq;
+}
+
+}  // namespace small_car

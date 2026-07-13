@@ -1,6 +1,7 @@
 # Build outputs
 build/
 cmake-build-*/
+rpi_host/build*/
 out/
 bin/
 obj/
