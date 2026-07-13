@@ -8,6 +8,10 @@
 #define GAMEPAD_CENTER_VALUE 127
 #define GAMEPAD_DEADBAND 8
 #define GAMEPAD_DEBUG_PERIOD 10U
+#define GAMEPAD_DRIVE_START_SPEED 260
+#define GAMEPAD_DRIVE_MAX_SPEED 700
+#define GAMEPAD_TURN_START_SPEED 320
+#define GAMEPAD_TURN_MAX_SPEED 750
 
 /* 保存最近一次 USB 解码后的手柄状态；业务层只读这个统一结构。 */
 static GamepadState g_gamepad_state = {
@@ -30,6 +34,22 @@ static int16_t ApplyDeadband(int16_t value)
     return 0;
   }
   return value;
+}
+
+static int16_t MapStickToSpeed(int16_t stick, int16_t start_speed, int16_t max_speed)
+{
+  if (stick == 0)
+  {
+    return 0;
+  }
+
+  const int16_t direction = (stick < 0) ? -1 : 1;
+  const int32_t abs_stick = (stick < 0) ? -(int32_t)stick : (int32_t)stick;
+  const int32_t speed_range = (int32_t)max_speed - (int32_t)start_speed;
+  const int32_t speed = (int32_t)start_speed +
+                        (abs_stick * abs_stick * speed_range) /
+                            ((int32_t)GAMEPAD_CENTER_VALUE * GAMEPAD_CENTER_VALUE);
+  return (int16_t)(direction * speed);
 }
 
 void Gamepad_Init(void)
@@ -109,8 +129,10 @@ bool Gamepad_GetControlCommand(ControlCommand *command)
       ApplyDeadband((int16_t)g_gamepad_state.lx - (int16_t)GAMEPAD_CENTER_VALUE);
   command->enabled = true;
   /* 将 8 位摇杆偏移量按比例映射到电机速度范围 -1000 到 1000。 */
-  command->forward = (int16_t)((centered_ly * MOTOR_MAX_SPEED) / GAMEPAD_CENTER_VALUE);
-  command->turn = (int16_t)((centered_lx * MOTOR_MAX_SPEED) / GAMEPAD_CENTER_VALUE);
+  command->forward =
+      MapStickToSpeed(centered_ly, GAMEPAD_DRIVE_START_SPEED, GAMEPAD_DRIVE_MAX_SPEED);
+  command->turn =
+      MapStickToSpeed(centered_lx, GAMEPAD_TURN_START_SPEED, GAMEPAD_TURN_MAX_SPEED);
   return true;
 }
 
