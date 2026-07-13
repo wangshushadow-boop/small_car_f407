@@ -27,6 +27,13 @@ static const MotorPwm kMotorPwms[] = {
     [MOTOR_D] = {&htim1, TIM_CHANNEL_4, &htim1, TIM_CHANNEL_3, "D"},
 };
 
+static const int8_t kMotorDirectionSigns[] = {
+    [MOTOR_A] = 1,
+    [MOTOR_B] = 1,
+    [MOTOR_C] = 1,
+    [MOTOR_D] = -1,
+};
+
 static int16_t g_reported_speed[] = {
     [MOTOR_A] = MOTOR_REPORT_SPEED_UNKNOWN,
     [MOTOR_B] = MOTOR_REPORT_SPEED_UNKNOWN,
@@ -183,6 +190,16 @@ static int16_t Motor_ClampSpeed(int16_t speed)
   return speed;
 }
 
+static int16_t Motor_ApplyDirectionSign(MotorId motor, int16_t speed)
+{
+  if (kMotorDirectionSigns[motor] < 0)
+  {
+    return (int16_t)-speed;
+  }
+
+  return speed;
+}
+
 void Motor_SetSpeed(MotorId motor, int16_t speed)
 {
   if (motor > MOTOR_D)
@@ -190,7 +207,7 @@ void Motor_SetSpeed(MotorId motor, int16_t speed)
     return;
   }
 
-  const int16_t clamped_speed = Motor_ClampSpeed(speed);
+  const int16_t clamped_speed = Motor_ApplyDirectionSign(motor, Motor_ClampSpeed(speed));
 
   /* 正速度走正转通道，负速度走反转通道；绝对值决定 PWM 占空比。 */
   if (clamped_speed > MOTOR_SPEED_DEADBAND)
