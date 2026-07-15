@@ -23,6 +23,7 @@ bool CarClient::SendStop() {
 }
 
 bool CarClient::SendDrive(std::int16_t forward, std::int16_t turn) {
+  // forward/turn 的范围由协议层限制到 [-1000, 1000]，调用层不必重复裁剪。
   return SendBytes(codec_.Drive(forward, turn));
 }
 
@@ -31,6 +32,8 @@ bool CarClient::SendServo(std::uint16_t left_us, std::uint16_t right_us) {
 }
 
 void CarClient::Poll() {
+  // 上位机主循环应周期调用 Poll()。这里一次最多读 256 字节，
+  // FrameParser 会自动处理半包、粘包和噪声。
   const auto data = serial_.Read(256);
   for (const auto& frame : parser_.Feed(data)) {
     HandleFrame(frame);
@@ -67,6 +70,8 @@ void CarClient::HandleFrame(const Frame& frame) {
     return;
   }
 
+  // CarClient 只缓存每类消息的最近一帧。算法层需要历史数据时，
+  // 应在自己的模块中读取后再做队列或滤波。
   if (const auto* value = std::get_if<ChassisStatus>(&decoded.value())) {
     chassis_status_ = *value;
   } else if (const auto* value = std::get_if<EncoderDelta>(&decoded.value())) {

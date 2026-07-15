@@ -12,6 +12,7 @@ constexpr std::size_t kHeaderSize = 6;
 constexpr std::size_t kMinFrameSize = 8;
 constexpr std::uint8_t kSyncBytes[] = {kSync0, kSync1};
 
+// 协议统一使用小端序，和 MCU 侧结构体拆包保持一致。
 void PutU16(std::vector<std::uint8_t>* data, std::uint16_t value) {
   data->push_back(static_cast<std::uint8_t>(value & 0xFF));
   data->push_back(static_cast<std::uint8_t>((value >> 8) & 0xFF));
@@ -54,6 +55,8 @@ std::int16_t ClampControl(std::int16_t value) {
   return std::clamp<std::int16_t>(value, -1000, 1000);
 }
 
+// 串口流中可能出现半包或噪声。若最后一个字节正好是帧头首字节 AA，
+// 需要保留下来，等待下一次 Feed() 拼成 AA 55。
 void DropNoise(std::vector<std::uint8_t>* buffer) {
   if (!buffer->empty() && buffer->back() == kSync0) {
     const std::uint8_t tail = buffer->back();
@@ -67,6 +70,7 @@ void DropNoise(std::vector<std::uint8_t>* buffer) {
 }  // namespace
 
 std::uint16_t Crc16CcittFalse(const std::uint8_t* data, std::size_t size) {
+  // CRC16-CCITT-FALSE：初值 0xFFFF，多项式 0x1021。
   std::uint16_t crc = 0xFFFF;
   for (std::size_t i = 0; i < size; ++i) {
     crc ^= static_cast<std::uint16_t>(data[i]) << 8;
@@ -108,7 +112,7 @@ std::vector<std::uint8_t> EncodeFrame(std::uint8_t msg,
   frame.push_back(static_cast<std::uint8_t>(payload.size()));
   frame.insert(frame.end(), payload.begin(), payload.end());
 
-  // CRC covers VER through PAYLOAD, excluding AA 55.
+  // CRC 覆盖 VER 到 PAYLOAD，不包含 AA 55 帧头，便于接收端重新同步。
   const std::uint16_t crc = Crc16CcittFalse(frame.data() + 2, frame.size() - 2);
   PutU16(&frame, crc);
   return frame;
@@ -157,6 +161,7 @@ std::vector<std::uint8_t> MakeServoFrame(std::uint8_t seq,
 
 std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
   const auto& payload = frame.payload;
+  // 这里只解析 MCU 会上传给树莓派的消息；树莓派下发的命令不需要反向解析。
   switch (static_cast<Msg>(frame.msg)) {
     case Msg::kChassisStatus: {
       RequirePayloadSize(payload, 12);
@@ -219,6 +224,7 @@ std::vector<Frame> FrameParser::Feed(const std::uint8_t* data, std::size_t size)
 
   std::vector<Frame> frames;
   while (true) {
+    // 串口是字节流，没有天然包边界，所以每次都先搜索 AA 55 帧头。
     auto sync = std::search(buffer_.begin(), buffer_.end(), std::begin(kSyncBytes),
                             std::end(kSyncBytes));
     if (sync == buffer_.end()) {
@@ -237,6 +243,7 @@ std::vector<Frame> FrameParser::Feed(const std::uint8_t* data, std::size_t size)
     const std::uint8_t seq = buffer_[4];
     const std::uint8_t length = buffer_[5];
     if (length > kMaxPayloadSize) {
+      // 长度字段异常时丢掉一个字节，继续寻找下一个可能的帧头。
       buffer_.erase(buffer_.begin());
       continue;
     }
@@ -251,6 +258,7 @@ std::vector<Frame> FrameParser::Feed(const std::uint8_t* data, std::size_t size)
         Crc16CcittFalse(buffer_.data() + 2, 4 + length);
 
     if (version == kProtocolVersion && expected_crc == actual_crc) {
+      // 版本和 CRC 都正确才交给上层，避免算法层拿到坏数据。
       Frame frame;
       frame.msg = msg;
       frame.seq = seq;
@@ -294,6 +302,7 @@ std::vector<std::uint8_t> PacketCodec::Servo(std::uint16_t left_us,
 }
 
 std::uint8_t PacketCodec::NextSeq() {
+  // 序号自然溢出即可形成 0-255 循环，用来对应 MCU 的 ACK。
   const std::uint8_t seq = seq_;
   seq_ = static_cast<std::uint8_t>(seq_ + 1);
   return seq;
