@@ -11,7 +11,7 @@
 | `tools/` | 独立测试工具，例如相机抓图、V4L2 抓图、音频录放。 |
 | `tests/` | 协议相关单元测试。 |
 | `modules.md` | 各模块职责和使用方式说明。 |
-| `raspberry-pi-debug.md` | 树莓派常用调试命令。 |
+| `raspberry-pi-debug.md` | 树莓派常用调试命令，包括 WiFi、串口、相机、音频和 STM32 烧录。 |
 
 ## 构建
 
