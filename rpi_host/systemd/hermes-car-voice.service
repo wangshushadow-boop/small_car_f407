@@ -1,0 +1,23 @@
+[Unit]
+Description=Hermes always-on voice assistant for the smart car
+After=network-online.target sound.target hermes-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ubuntu
+Environment=HOME=/home/ubuntu
+Environment=PYTHONUNBUFFERED=1
+Environment=CAR_VOICE_INPUT_DEVICE=0
+Environment=CAR_VOICE_PLAYBACK_DEVICE=plughw:0,0
+Environment=CAR_VOICE_RMS_THRESHOLD=250
+Environment=CAR_VOICE_WAKE_PHRASES=小车,晓车,校车,像车,想车,小撤
+Environment=CAR_VOICE_WAKE_ON_ANY_SPEECH=true
+Environment=CAR_VOICE_WAKE_STT_MODEL=/home/ubuntu/.hermes/models/faster-whisper-tiny
+ExecStart=/home/ubuntu/.hermes/venv/bin/python /home/ubuntu/.hermes/car_voice/hermes_voice_daemon.py
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target
