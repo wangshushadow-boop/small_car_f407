@@ -54,6 +54,13 @@ if(UNIX)
   target_link_libraries(audio_loopback
     PRIVATE small_car_host
   )
+
+  add_executable(sensor_monitor
+    tools/sensor_monitor.cpp
+  )
+  target_link_libraries(sensor_monitor
+    PRIVATE small_car_host
+  )
 endif()
 
 add_executable(protocol_test

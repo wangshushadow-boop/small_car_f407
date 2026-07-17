@@ -55,6 +55,12 @@ ctest --test-dir build --output-on-failure
 ./build/small_car_host_cli --port /dev/ttyACM0 servo 1500 1500
 ```
 
+远程查看传感器日志：
+
+```bash
+./build-sensor-monitor/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra
+```
+
 ## 可选工具
 
 启用 OpenCV 相机工具：

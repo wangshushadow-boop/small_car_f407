@@ -12,6 +12,7 @@
 | 命令行工具 | `main.cpp` | 用于临时调试 MCU 通信。 | 已实现。 |
 | 音频模块 | `audio_device.hpp` / `audio_device.cpp` | 使用 ALSA API 录音、播放、保存 WAV。 | 已实现并在树莓派测试通过。 |
 | 音频测试工具 | `tools/audio_loopback.cpp` | 录制一段音频并立即播放。 | 已实现并测试通过。 |
+| 传感器监视工具 | `tools/sensor_monitor.cpp` | 远程查看 IMU、编码器、超声、底盘和设备状态日志。 | 已实现并测试通过。 |
 | OpenCV 相机工具 | `tools/camera_capture.cpp` | 使用 OpenCV 从 USB 摄像头抓取 JPG。 | 已实现并测试过。 |
 | V4L2 相机工具 | `tools/v4l2_capture.cpp` | 不依赖 OpenCV，直接使用 V4L2 抓取 MJPG 或 YUYV。 | 已实现并测试过。 |
 | 协议测试 | `tests/protocol_test.cpp` | 验证协议编码、解码、CRC、帧解析。 | 已实现。 |
@@ -107,6 +108,35 @@
 ./build/small_car_host_cli --port /dev/ttyACM0 drive 200 0
 ./build/small_car_host_cli --port /dev/ttyACM0 servo 1500 1500
 ```
+
+## 传感器监视工具
+
+| 项目 | 说明 |
+| --- | --- |
+| 可执行文件 | `sensor_monitor` |
+| 源文件 | `tools/sensor_monitor.cpp` |
+| 作用 | 通过串口3协议远程查看 MCU 上传的传感器和状态数据。 |
+
+常用命令：
+
+```bash
+cd ~/small_car_f407/rpi_host
+cmake -S . -B build-sensor-monitor
+cmake --build build-sensor-monitor --target sensor_monitor
+./build-sensor-monitor/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra
+```
+
+参数说明：
+
+| 参数 | 说明 |
+| --- | --- |
+| `--imu` | 显示 IMU 原始数据。 |
+| `--enc` | 显示四路编码器增量。 |
+| `--ultra` | 显示超声距离。 |
+| `--chassis` | 显示底盘状态。 |
+| `--device` | 显示设备在线状态。 |
+| `--all` | 显示全部数据。 |
+| `--interval-ms 300` | 设置每类数据的最小打印间隔。 |
 
 ## 音频模块
 

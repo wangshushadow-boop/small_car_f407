@@ -1,0 +1,224 @@
+#include "small_car_host/car_client.hpp"
+
+#include <chrono>
+#include <cstdint>
+#include <iostream>
+#include <string>
+#include <thread>
+
+namespace {
+
+struct Options {
+  std::string port = "/dev/ttyACM0";
+  int baudrate = 115200;
+  int interval_ms = 100;
+  bool show_imu = false;
+  bool show_encoder = false;
+  bool show_ultrasonic = false;
+  bool show_chassis = false;
+  bool show_device = false;
+};
+
+void PrintUsage() {
+  std::cout
+      << "Usage:\n"
+      << "  sensor_monitor [--port /dev/ttyACM0] [--all]\n"
+      << "  sensor_monitor [--imu] [--enc] [--ultra] [--chassis] [--device]\n"
+      << "  sensor_monitor [--interval-ms 100]\n\n"
+      << "Examples:\n"
+      << "  sensor_monitor --all\n"
+      << "  sensor_monitor --imu --enc --ultra\n"
+      << "  sensor_monitor --port /dev/ttyACM0 --ultra\n";
+}
+
+bool ParseArgs(int argc, char** argv, Options* options) {
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--help" || arg == "-h") {
+      PrintUsage();
+      return false;
+    }
+    if (arg == "--port" && i + 1 < argc) {
+      options->port = argv[++i];
+    } else if (arg == "--baud" && i + 1 < argc) {
+      options->baudrate = std::stoi(argv[++i]);
+    } else if (arg == "--interval-ms" && i + 1 < argc) {
+      options->interval_ms = std::stoi(argv[++i]);
+    } else if (arg == "--imu") {
+      options->show_imu = true;
+    } else if (arg == "--enc") {
+      options->show_encoder = true;
+    } else if (arg == "--ultra") {
+      options->show_ultrasonic = true;
+    } else if (arg == "--chassis") {
+      options->show_chassis = true;
+    } else if (arg == "--device") {
+      options->show_device = true;
+    } else if (arg == "--all") {
+      options->show_imu = true;
+      options->show_encoder = true;
+      options->show_ultrasonic = true;
+      options->show_chassis = true;
+      options->show_device = true;
+    } else {
+      std::cerr << "unknown argument: " << arg << "\n";
+      PrintUsage();
+      return false;
+    }
+  }
+
+  if (!options->show_imu && !options->show_encoder && !options->show_ultrasonic &&
+      !options->show_chassis && !options->show_device) {
+    options->show_imu = true;
+    options->show_encoder = true;
+    options->show_ultrasonic = true;
+  }
+
+  return true;
+}
+
+bool CanPrint(std::chrono::steady_clock::time_point now,
+              std::chrono::steady_clock::time_point* last_print,
+              int interval_ms) {
+  if (interval_ms <= 0) {
+    *last_print = now;
+    return true;
+  }
+
+  const auto elapsed_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(now - *last_print).count();
+  if (elapsed_ms < interval_ms) {
+    return false;
+  }
+
+  *last_print = now;
+  return true;
+}
+
+void PrintImu(const small_car::ImuRaw& imu) {
+  std::cout << "[IMU] t=" << imu.mcu_time_ms
+            << " ax=" << imu.ax
+            << " ay=" << imu.ay
+            << " az=" << imu.az
+            << " gx=" << imu.gx
+            << " gy=" << imu.gy
+            << " gz=" << imu.gz << "\n";
+}
+
+void PrintEncoder(const small_car::EncoderDelta& enc) {
+  std::cout << "[ENC] t=" << enc.mcu_time_ms
+            << " A=" << enc.delta_a
+            << " B=" << enc.delta_b
+            << " C=" << enc.delta_c
+            << " D=" << enc.delta_d << "\n";
+}
+
+void PrintUltrasonic(const small_car::ChassisStatus& chassis) {
+  if (chassis.ultra_mm < 0) {
+    std::cout << "[ULTRA] t=" << chassis.mcu_time_ms << " invalid\n";
+    return;
+  }
+
+  std::cout << "[ULTRA] t=" << chassis.mcu_time_ms
+            << " distance=" << chassis.ultra_mm << " mm\n";
+}
+
+void PrintChassis(const small_car::ChassisStatus& chassis) {
+  std::cout << "[CHASSIS] t=" << chassis.mcu_time_ms
+            << " source=" << static_cast<int>(chassis.source)
+            << " enabled=" << chassis.enabled
+            << " forward=" << chassis.forward
+            << " turn=" << chassis.turn
+            << " ultra=" << chassis.ultra_mm << "\n";
+}
+
+void PrintDevice(const small_car::DeviceStatus& device) {
+  std::cout << "[DEVICE] t=" << device.mcu_time_ms
+            << " pad=" << device.pad_ok
+            << " imu=" << device.imu_ok
+            << " ultra=" << device.ultra_ok
+            << " error=" << static_cast<int>(device.error) << "\n";
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  Options options;
+  if (!ParseArgs(argc, argv, &options)) {
+    return 1;
+  }
+
+  small_car::CarClient client;
+  if (!client.Open(options.port, options.baudrate)) {
+    std::cerr << "open serial failed: " << options.port << "\n";
+    return 2;
+  }
+
+  std::cout << "[MON] port=" << options.port << " baud=" << options.baudrate << "\n";
+  std::cout << "[MON] interval=" << options.interval_ms << " ms\n";
+  std::cout << "[MON] press Ctrl+C to stop\n";
+
+  std::uint32_t last_imu_time = 0;
+  std::uint32_t last_encoder_time = 0;
+  std::uint32_t last_chassis_time = 0;
+  std::uint32_t last_ultrasonic_time = 0;
+  std::uint32_t last_device_time = 0;
+  auto last_imu_print = std::chrono::steady_clock::now();
+  auto last_encoder_print = last_imu_print;
+  auto last_chassis_print = last_imu_print;
+  auto last_ultrasonic_print = last_imu_print;
+  auto last_device_print = last_imu_print;
+
+  while (true) {
+    client.Poll();
+    const auto now = std::chrono::steady_clock::now();
+
+    if (options.show_imu) {
+      if (const auto imu = client.GetImuRaw()) {
+        if (imu->mcu_time_ms != last_imu_time &&
+            CanPrint(now, &last_imu_print, options.interval_ms)) {
+          last_imu_time = imu->mcu_time_ms;
+          PrintImu(*imu);
+        }
+      }
+    }
+
+    if (options.show_encoder) {
+      if (const auto enc = client.GetEncoderDelta()) {
+        if (enc->mcu_time_ms != last_encoder_time &&
+            CanPrint(now, &last_encoder_print, options.interval_ms)) {
+          last_encoder_time = enc->mcu_time_ms;
+          PrintEncoder(*enc);
+        }
+      }
+    }
+
+    if (options.show_chassis || options.show_ultrasonic) {
+      if (const auto chassis = client.GetChassisStatus()) {
+        if (options.show_chassis && chassis->mcu_time_ms != last_chassis_time &&
+            CanPrint(now, &last_chassis_print, options.interval_ms)) {
+          last_chassis_time = chassis->mcu_time_ms;
+          PrintChassis(*chassis);
+        }
+        if (options.show_ultrasonic && chassis->mcu_time_ms != last_ultrasonic_time &&
+            CanPrint(now, &last_ultrasonic_print, options.interval_ms)) {
+          last_ultrasonic_time = chassis->mcu_time_ms;
+          PrintUltrasonic(*chassis);
+        }
+      }
+    }
+
+    if (options.show_device) {
+      if (const auto device = client.GetDeviceStatus()) {
+        if (device->mcu_time_ms != last_device_time &&
+            CanPrint(now, &last_device_print, options.interval_ms)) {
+          last_device_time = device->mcu_time_ms;
+          PrintDevice(*device);
+        }
+      }
+    }
+
+    std::cout << std::flush;
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+}
