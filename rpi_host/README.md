@@ -58,7 +58,7 @@ ctest --test-dir build --output-on-failure
 远程查看传感器日志：
 
 ```bash
-./build-sensor-monitor/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra
+./build-sensor-monitor/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra --odom
 ```
 
 ## 可选工具

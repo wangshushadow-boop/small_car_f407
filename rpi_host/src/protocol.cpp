@@ -45,6 +45,10 @@ std::uint32_t ReadU32(const std::vector<std::uint8_t>& data, std::size_t offset)
          (static_cast<std::uint32_t>(data[offset + 3]) << 24);
 }
 
+std::int32_t ReadI32(const std::vector<std::uint8_t>& data, std::size_t offset) {
+  return static_cast<std::int32_t>(ReadU32(data, offset));
+}
+
 void RequirePayloadSize(const std::vector<std::uint8_t>& payload, std::size_t size) {
   if (payload.size() != size) {
     throw std::runtime_error("payload size mismatch");
@@ -209,6 +213,17 @@ std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
     case Msg::kAck: {
       RequirePayloadSize(payload, 3);
       return Ack{payload[0], payload[1], payload[2]};
+    }
+    case Msg::kOdometry: {
+      RequirePayloadSize(payload, 18);
+      return Odometry{
+          ReadU32(payload, 0),
+          ReadI32(payload, 4),
+          ReadI16(payload, 8),
+          ReadI32(payload, 10),
+          ReadI16(payload, 14),
+          payload[16] != 0,
+      };
     }
     default:
       return std::nullopt;

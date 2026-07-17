@@ -26,6 +26,7 @@ enum class Msg : std::uint8_t {
   kImuRaw = 0x83,
   kDeviceStatus = 0x84,
   kAck = 0x85,
+  kOdometry = 0x86,
 };
 
 struct Frame {
@@ -35,7 +36,7 @@ struct Frame {
 };
 
 using DecodedMessage =
-    std::variant<ChassisStatus, EncoderDelta, ImuRaw, DeviceStatus, Ack>;
+    std::variant<ChassisStatus, EncoderDelta, ImuRaw, DeviceStatus, Ack, Odometry>;
 
 std::uint16_t Crc16CcittFalse(const std::uint8_t* data, std::size_t size);
 std::uint16_t Crc16CcittFalse(const std::vector<std::uint8_t>& data);

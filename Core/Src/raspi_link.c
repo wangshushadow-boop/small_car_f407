@@ -26,6 +26,7 @@
 #define RASPI_MSG_IMU_RAW 0x83U
 #define RASPI_MSG_DEVICE_STATUS 0x84U
 #define RASPI_MSG_ACK 0x85U
+#define RASPI_MSG_ODOMETRY 0x86U
 
 #define RASPI_MODE_STOP 0U
 #define RASPI_MODE_VELOCITY 1U
@@ -81,6 +82,7 @@ static int16_t ReadI16Le(const uint8_t *data);
 static void WriteU16Le(uint8_t *data, uint16_t value);
 static void WriteI16Le(uint8_t *data, int16_t value);
 static void WriteU32Le(uint8_t *data, uint32_t value);
+static void WriteI32Le(uint8_t *data, int32_t value);
 
 void RaspiLink_Init(void)
 {
@@ -182,6 +184,24 @@ void RaspiLink_SendDeviceStatus(bool pad_ok, bool imu_ok, bool ultra_ok, uint8_t
   payload[6] = ultra_ok ? 1U : 0U;
   payload[7] = error;
   SendFrame(RASPI_MSG_DEVICE_STATUS, payload, sizeof(payload));
+}
+
+void RaspiLink_SendOdometry(uint32_t odom_time_ms,
+                            int32_t distance_mm,
+                            int16_t speed_mm_s,
+                            int32_t yaw_mdeg,
+                            int16_t yaw_rate_mdeg_s,
+                            bool calibrated)
+{
+  uint8_t payload[18] = {0};
+  WriteU32Le(&payload[0], odom_time_ms);
+  WriteI32Le(&payload[4], distance_mm);
+  WriteI16Le(&payload[8], speed_mm_s);
+  WriteI32Le(&payload[10], yaw_mdeg);
+  WriteI16Le(&payload[14], yaw_rate_mdeg_s);
+  payload[16] = calibrated ? 1U : 0U;
+  payload[17] = 0U;
+  SendFrame(RASPI_MSG_ODOMETRY, payload, sizeof(payload));
 }
 
 void RaspiLink_OnUartRxCpltCallback(UART_HandleTypeDef *huart)
@@ -488,4 +508,9 @@ static void WriteU32Le(uint8_t *data, uint32_t value)
   data[1] = (uint8_t)((value >> 8U) & 0xFFU);
   data[2] = (uint8_t)((value >> 16U) & 0xFFU);
   data[3] = (uint8_t)((value >> 24U) & 0xFFU);
+}
+
+static void WriteI32Le(uint8_t *data, int32_t value)
+{
+  WriteU32Le(data, (uint32_t)value);
 }

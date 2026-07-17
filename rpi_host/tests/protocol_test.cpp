@@ -89,6 +89,32 @@ void TestDecodeChassis() {
   Expect(status->ultra_mm == 560, "ultra mismatch");
 }
 
+void TestDecodeOdometry() {
+  const auto raw = small_car::EncodeFrame(
+      static_cast<std::uint8_t>(small_car::Msg::kOdometry),
+      4,
+      {
+          0xE8, 0x03, 0x00, 0x00,  // t=1000
+          0x20, 0x03, 0x00, 0x00,  // distance=800
+          0x64, 0x00,              // speed=100
+          0x88, 0x13, 0x00, 0x00,  // yaw=5000 mdeg
+          0x0A, 0x00,              // yaw_rate=10 mdeg/s
+          0x01,                    // calibrated=true
+          0x00,                    // reserved
+      });
+  small_car::FrameParser parser;
+  const auto frames = parser.Feed(raw);
+  const auto decoded = small_car::DecodePayload(frames[0]);
+  const auto* odom = std::get_if<small_car::Odometry>(&decoded.value());
+  Expect(odom != nullptr, "odometry type mismatch");
+  Expect(odom->mcu_time_ms == 1000, "odometry time mismatch");
+  Expect(odom->distance_mm == 800, "odometry distance mismatch");
+  Expect(odom->speed_mm_s == 100, "odometry speed mismatch");
+  Expect(odom->yaw_mdeg == 5000, "odometry yaw mismatch");
+  Expect(odom->yaw_rate_mdeg_s == 10, "odometry yaw rate mismatch");
+  Expect(odom->calibrated, "odometry calibrated mismatch");
+}
+
 void TestDriveClamp() {
   const auto raw = small_car::MakeDriveFrame(1, 2000, -2000, 1);
   small_car::FrameParser parser;
@@ -108,6 +134,7 @@ int main() {
     TestNoiseAndSplit();
     TestBadCrcDropped();
     TestDecodeChassis();
+    TestDecodeOdometry();
     TestDriveClamp();
   } catch (const std::exception& error) {
     std::cerr << error.what() << "\n";

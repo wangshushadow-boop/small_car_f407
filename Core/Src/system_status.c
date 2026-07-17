@@ -7,6 +7,7 @@
 #include "gamepad.h"
 #include "icm20948.h"
 #include "main.h"
+#include "odometry.h"
 #include "oled.h"
 #include "raspi_link.h"
 #include "ultrasonic.h"
@@ -14,20 +15,25 @@
 #define CHASSIS_REPORT_PERIOD_MS 50U
 #define ENCODER_REPORT_PERIOD_MS 20U
 #define IMU_REPORT_PERIOD_MS 20U
+#define ODOMETRY_REPORT_PERIOD_MS 20U
 #define DEVICE_REPORT_PERIOD_MS 1000U
 #define OLED_REPORT_PERIOD_MS 1000U
+#define IMU_REINIT_PERIOD_MS 1000U
 
 static uint32_t g_last_chassis_report_tick = 0U;
 static uint32_t g_last_encoder_report_tick = 0U;
 static uint32_t g_last_imu_report_tick = 0U;
+static uint32_t g_last_odometry_report_tick = 0U;
 static uint32_t g_last_device_report_tick = 0U;
 static uint32_t g_last_oled_report_tick = 0U;
+static uint32_t g_last_imu_reinit_tick = 0U;
 static bool g_imu_ok = false;
 
 static const char *SourceToText(ControlSource source);
 static void ReportChassisToHost(const ControlCommand *command);
 static void ReportEncoderToHost(void);
 static void ReportImuToHost(void);
+static void ReportOdometryToHost(void);
 static void ReportDeviceToHost(void);
 static void ReportToOled(const ControlCommand *command);
 
@@ -37,8 +43,10 @@ void SystemStatus_Init(void)
   g_last_chassis_report_tick = now;
   g_last_encoder_report_tick = now;
   g_last_imu_report_tick = now;
+  g_last_odometry_report_tick = now;
   g_last_device_report_tick = now;
   g_last_oled_report_tick = now;
+  g_last_imu_reinit_tick = now;
   g_imu_ok = false;
 }
 
@@ -67,6 +75,12 @@ void SystemStatus_TaskStep(const ControlCommand *command)
   {
     g_last_imu_report_tick = now;
     ReportImuToHost();
+  }
+
+  if ((now - g_last_odometry_report_tick) >= ODOMETRY_REPORT_PERIOD_MS)
+  {
+    g_last_odometry_report_tick = now;
+    ReportOdometryToHost();
   }
 
   if ((now - g_last_device_report_tick) >= DEVICE_REPORT_PERIOD_MS)
@@ -144,6 +158,13 @@ static void ReportImuToHost(void)
 
   if (g_imu_ok)
   {
+    EncoderSample encoder_a = Encoder_GetSample(MOTOR_A);
+    EncoderSample encoder_b = Encoder_GetSample(MOTOR_B);
+    EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
+    EncoderSample encoder_d = Encoder_GetSample(MOTOR_D);
+
+    Odometry_Update(&imu, encoder_a, encoder_b, encoder_c, encoder_d, HAL_GetTick());
+
     RaspiLink_SendImuRaw(imu.accel_x,
                          imu.accel_y,
                          imu.accel_z,
@@ -164,8 +185,37 @@ static void ReportImuToHost(void)
   }
   else
   {
+    const uint32_t now = HAL_GetTick();
+    if ((now - g_last_imu_reinit_tick) >= IMU_REINIT_PERIOD_MS)
+    {
+      g_last_imu_reinit_tick = now;
+      imu_status = Icm20948_Init();
+      g_imu_ok = (imu_status == ICM20948_STATUS_OK);
+    }
+
     DebugUart_PrintfIf(DEBUG_LOG_IMU, "[IMU] read failed, status=%d\r\n", imu_status);
   }
+}
+
+static void ReportOdometryToHost(void)
+{
+  OdometrySample odometry = Odometry_GetSample();
+
+  RaspiLink_SendOdometry(odometry.time_ms,
+                         odometry.distance_mm,
+                         odometry.speed_mm_s,
+                         odometry.yaw_mdeg,
+                         odometry.yaw_rate_mdeg_s,
+                         odometry.calibrated);
+
+  DebugUart_PrintfIf(DEBUG_LOG_ODOMETRY,
+                     "[ODOM] t=%lu dist=%ld speed=%d yaw=%ld rate=%d cal=%d\r\n",
+                     odometry.time_ms,
+                     odometry.distance_mm,
+                     odometry.speed_mm_s,
+                     odometry.yaw_mdeg,
+                     odometry.yaw_rate_mdeg_s,
+                     odometry.calibrated ? 1 : 0);
 }
 
 static void ReportDeviceToHost(void)

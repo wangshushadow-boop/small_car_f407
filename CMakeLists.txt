@@ -57,6 +57,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/host_link.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/icm20948.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/motor.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/odometry.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/oled.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/raspi_link.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/servo.c

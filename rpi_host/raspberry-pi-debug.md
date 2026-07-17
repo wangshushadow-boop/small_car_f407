@@ -33,7 +33,7 @@ minicom -D /dev/ttyACM0 -b 115200
 cd ~/small_car_f407/rpi_host
 cmake -S . -B build-sensor-monitor
 cmake --build build-sensor-monitor --target sensor_monitor
-./build-sensor-monitor/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra
+./build-sensor-monitor/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra --odom
 ./build-sensor-monitor/sensor_monitor --port /dev/ttyACM0 --all --interval-ms 300
 ```
 

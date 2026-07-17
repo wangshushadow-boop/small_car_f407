@@ -60,6 +60,15 @@ struct DeviceStatus {
   std::uint8_t error = 0;
 };
 
+struct Odometry {
+  std::uint32_t mcu_time_ms = 0;
+  std::int32_t distance_mm = 0;
+  std::int16_t speed_mm_s = 0;
+  std::int32_t yaw_mdeg = 0;
+  std::int16_t yaw_rate_mdeg_s = 0;
+  bool calibrated = false;
+};
+
 struct Ack {
   std::uint8_t ack_msg = 0;
   std::uint8_t ack_seq = 0;

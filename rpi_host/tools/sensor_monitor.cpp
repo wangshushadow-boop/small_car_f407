@@ -17,13 +17,14 @@ struct Options {
   bool show_ultrasonic = false;
   bool show_chassis = false;
   bool show_device = false;
+  bool show_odometry = false;
 };
 
 void PrintUsage() {
   std::cout
       << "Usage:\n"
       << "  sensor_monitor [--port /dev/ttyACM0] [--all]\n"
-      << "  sensor_monitor [--imu] [--enc] [--ultra] [--chassis] [--device]\n"
+      << "  sensor_monitor [--imu] [--enc] [--ultra] [--chassis] [--device] [--odom]\n"
       << "  sensor_monitor [--interval-ms 100]\n\n"
       << "Examples:\n"
       << "  sensor_monitor --all\n"
@@ -54,12 +55,15 @@ bool ParseArgs(int argc, char** argv, Options* options) {
       options->show_chassis = true;
     } else if (arg == "--device") {
       options->show_device = true;
+    } else if (arg == "--odom") {
+      options->show_odometry = true;
     } else if (arg == "--all") {
       options->show_imu = true;
       options->show_encoder = true;
       options->show_ultrasonic = true;
       options->show_chassis = true;
       options->show_device = true;
+      options->show_odometry = true;
     } else {
       std::cerr << "unknown argument: " << arg << "\n";
       PrintUsage();
@@ -68,7 +72,7 @@ bool ParseArgs(int argc, char** argv, Options* options) {
   }
 
   if (!options->show_imu && !options->show_encoder && !options->show_ultrasonic &&
-      !options->show_chassis && !options->show_device) {
+      !options->show_chassis && !options->show_device && !options->show_odometry) {
     options->show_imu = true;
     options->show_encoder = true;
     options->show_ultrasonic = true;
@@ -140,6 +144,15 @@ void PrintDevice(const small_car::DeviceStatus& device) {
             << " error=" << static_cast<int>(device.error) << "\n";
 }
 
+void PrintOdometry(const small_car::Odometry& odometry) {
+  std::cout << "[ODOM] t=" << odometry.mcu_time_ms
+            << " dist=" << odometry.distance_mm << " mm"
+            << " speed=" << odometry.speed_mm_s << " mm/s"
+            << " yaw=" << (odometry.yaw_mdeg / 1000.0) << " deg"
+            << " yaw_rate=" << (odometry.yaw_rate_mdeg_s / 1000.0) << " deg/s"
+            << " calibrated=" << odometry.calibrated << "\n";
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -163,11 +176,14 @@ int main(int argc, char** argv) {
   std::uint32_t last_chassis_time = 0;
   std::uint32_t last_ultrasonic_time = 0;
   std::uint32_t last_device_time = 0;
+  std::uint32_t last_odometry_time = 0;
+  bool seen_odometry = false;
   auto last_imu_print = std::chrono::steady_clock::now();
   auto last_encoder_print = last_imu_print;
   auto last_chassis_print = last_imu_print;
   auto last_ultrasonic_print = last_imu_print;
   auto last_device_print = last_imu_print;
+  auto last_odometry_print = last_imu_print;
 
   while (true) {
     client.Poll();
@@ -214,6 +230,17 @@ int main(int argc, char** argv) {
             CanPrint(now, &last_device_print, options.interval_ms)) {
           last_device_time = device->mcu_time_ms;
           PrintDevice(*device);
+        }
+      }
+    }
+
+    if (options.show_odometry) {
+      if (const auto odometry = client.GetOdometry()) {
+        if ((!seen_odometry || odometry->mcu_time_ms != last_odometry_time) &&
+            CanPrint(now, &last_odometry_print, options.interval_ms)) {
+          seen_odometry = true;
+          last_odometry_time = odometry->mcu_time_ms;
+          PrintOdometry(*odometry);
         }
       }
     }

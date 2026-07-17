@@ -28,6 +28,7 @@ class CarClient {
   std::optional<EncoderDelta> GetEncoderDelta() const;
   std::optional<ImuRaw> GetImuRaw() const;
   std::optional<DeviceStatus> GetDeviceStatus() const;
+  std::optional<Odometry> GetOdometry() const;
   std::optional<Ack> GetLastAck() const;
 
  private:
@@ -42,6 +43,7 @@ class CarClient {
   std::optional<EncoderDelta> encoder_delta_;
   std::optional<ImuRaw> imu_raw_;
   std::optional<DeviceStatus> device_status_;
+  std::optional<Odometry> odometry_;
   std::optional<Ack> last_ack_;
 };
 

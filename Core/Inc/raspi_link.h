@@ -25,6 +25,12 @@ void RaspiLink_SendDeviceStatus(bool pad_ok,
                                 bool imu_ok,
                                 bool ultra_ok,
                                 uint8_t error);
+void RaspiLink_SendOdometry(uint32_t odom_time_ms,
+                            int32_t distance_mm,
+                            int16_t speed_mm_s,
+                            int32_t yaw_mdeg,
+                            int16_t yaw_rate_mdeg_s,
+                            bool calibrated);
 void RaspiLink_OnUartRxCpltCallback(UART_HandleTypeDef *huart);
 
 #endif  // RASPI_LINK_H_

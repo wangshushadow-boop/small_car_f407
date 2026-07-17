@@ -56,6 +56,10 @@ std::optional<DeviceStatus> CarClient::GetDeviceStatus() const {
   return device_status_;
 }
 
+std::optional<Odometry> CarClient::GetOdometry() const {
+  return odometry_;
+}
+
 std::optional<Ack> CarClient::GetLastAck() const {
   return last_ack_;
 }
@@ -80,6 +84,8 @@ void CarClient::HandleFrame(const Frame& frame) {
     imu_raw_ = *value;
   } else if (const auto* value = std::get_if<DeviceStatus>(&decoded.value())) {
     device_status_ = *value;
+  } else if (const auto* value = std::get_if<Odometry>(&decoded.value())) {
+    odometry_ = *value;
   } else if (const auto* value = std::get_if<Ack>(&decoded.value())) {
     last_ack_ = *value;
   }

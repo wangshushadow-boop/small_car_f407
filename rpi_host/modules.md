@@ -41,6 +41,7 @@
 | MCU 到树莓派 | `kImuRaw` | `0x83` | IMU 原始数据。 |
 | MCU 到树莓派 | `kDeviceStatus` | `0x84` | 设备在线状态。 |
 | MCU 到树莓派 | `kAck` | `0x85` | 命令响应。 |
+| MCU 到树莓派 | `kOdometry` | `0x86` | 编码器和 IMU 融合后的里程计数据。 |
 
 ## 串口模块
 
@@ -88,6 +89,7 @@
 | `GetChassisStatus()` | 获取最近一次底盘状态。 |
 | `GetEncoderDelta()` | 获取最近一次编码器增量。 |
 | `GetImuRaw()` | 获取最近一次 IMU 数据。 |
+| `GetOdometry()` | 获取最近一次里程计融合数据。 |
 | `GetDeviceStatus()` | 获取最近一次设备状态。 |
 | `GetLastAck()` | 获取最近一次 MCU 命令响应。 |
 
