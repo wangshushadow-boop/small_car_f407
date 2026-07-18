@@ -4,7 +4,7 @@
 small_car:
   ros__parameters:
     # 参数 ID 1：里程计每个编码器计数对应毫米数的分子，分母固定为 1000。
-    odom_mm_per_tick_num: 2410
+    odom_mm_per_tick_num: 2513
 
     # 参数 ID 2：手柄前进方向开始驱动时的电机输出，范围 0-1000。
     gamepad_forward_start: 550
@@ -16,10 +16,10 @@ small_car:
     gamepad_drive_max: 800
 
     # 参数 ID 5：手柄转向开始生效时的转向输出，范围 0-1000。
-    gamepad_turn_start: 260
+    gamepad_turn_start: 500
 
     # 参数 ID 6：手柄转向最大输出，范围 0-1000。
-    gamepad_turn_max: 550
+    gamepad_turn_max: 650
 
     # 参数 ID 7：超声避障距离阈值，单位为毫米。
     ultra_near_distance_mm: 200
