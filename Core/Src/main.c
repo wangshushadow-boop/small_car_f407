@@ -28,6 +28,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "chassis.h"
+#include "chassis_params.h"
 #include "control_mux.h"
 #include "debug_uart.h"
 #include "encoder.h"
@@ -124,7 +125,8 @@ int main(void)
    * 1. 先初始化调试串口，后续模块可以输出错误和状态。
    * 2. 再初始化传感器和执行机构。
    * 3. 最后初始化输入、命令和控制仲裁模块。
-   */
+  */
+  ChassisParams_Init();
   DebugUart_Init();
   DebugUart_WriteStringIf(DEBUG_LOG_BOOT, "\r\n[BOOT] Debug UART1 ready, 115200 8N1\r\n");
   Oled_Init();

@@ -1,21 +1,25 @@
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <iostream>
 #include <string>
 #include <thread>
 
 #include "small_car_host/car_client.hpp"
+#include "small_car_host/chassis_config.hpp"
 
 namespace {
 
 void PrintUsage() {
   std::cout
       << "Usage:\n"
+      << "  small_car_host_cli --port /dev/ttyACM0 [--config <path>]\n"
       << "  small_car_host_cli --port /dev/ttyACM0 monitor [--heartbeat-ms 1000]\n"
       << "  small_car_host_cli --port /dev/ttyACM0 heartbeat\n"
       << "  small_car_host_cli --port /dev/ttyACM0 stop\n"
       << "  small_car_host_cli --port /dev/ttyACM0 drive <forward> <turn>\n"
-      << "  small_car_host_cli --port /dev/ttyACM0 servo <left_us> <right_us>\n";
+      << "  small_car_host_cli --port /dev/ttyACM0 servo <left_us> <right_us>\n"
+      << "  small_car_host_cli --port /dev/ttyACM0 odom-reset\n";
 }
 
 std::string ArgValue(int argc, char** argv, const std::string& key) {
@@ -31,11 +35,47 @@ int FirstCommandIndex(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg == "monitor" || arg == "heartbeat" || arg == "stop" || arg == "drive" ||
-        arg == "servo") {
+        arg == "servo" || arg == "odom-reset") {
       return i;
     }
   }
   return -1;
+}
+
+bool HasUnexpectedArgument(int argc, char** argv) {
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--port" || arg == "--config") {
+      ++i;
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+int ApplyDefaultConfig(int argc, char** argv, small_car::CarClient* client) {
+  const std::string config_arg = ArgValue(argc, argv, "--config");
+  const std::string config_path =
+      config_arg.empty() ? small_car::DefaultChassisConfigPath(argv[0]) : config_arg;
+  try {
+    const auto parameters = small_car::LoadChassisConfig(config_path);
+    std::string error;
+    if (!small_car::ApplyChassisConfig(
+            client, parameters, std::chrono::milliseconds(800), &error)) {
+      std::cerr << "apply config failed: " << error << "\n";
+      return 5;
+    }
+    for (const auto& parameter : parameters) {
+      std::cout << "[CONFIG] id=" << static_cast<int>(parameter.id)
+                << " name=" << parameter.name << " value=" << parameter.value << "\n";
+    }
+    std::cout << "[CONFIG] applied and verified: " << config_path << "\n";
+    return 0;
+  } catch (const std::exception& error) {
+    std::cerr << "load config failed: " << error.what() << "\n";
+    return 5;
+  }
 }
 
 void PrintStatus(const small_car::CarClient& client) {
@@ -76,7 +116,7 @@ void PrintStatus(const small_car::CarClient& client) {
 int main(int argc, char** argv) {
   const std::string port = ArgValue(argc, argv, "--port");
   const int command_index = FirstCommandIndex(argc, argv);
-  if (port.empty() || command_index < 0) {
+  if (port.empty() || (command_index < 0 && HasUnexpectedArgument(argc, argv))) {
     PrintUsage();
     return 1;
   }
@@ -85,6 +125,11 @@ int main(int argc, char** argv) {
   if (!client.Open(port)) {
     std::cerr << "open serial failed: " << port << "\n";
     return 2;
+  }
+
+  const int config_result = ApplyDefaultConfig(argc, argv, &client);
+  if (config_result != 0 || command_index < 0) {
+    return config_result;
   }
 
   const std::string command = argv[command_index];
@@ -113,6 +158,9 @@ int main(int argc, char** argv) {
                             static_cast<std::uint16_t>(std::stoi(argv[command_index + 2])))
                ? 0
                : 3;
+  }
+  if (command == "odom-reset") {
+    return client.SendOdomReset() ? 0 : 3;
   }
 
   int heartbeat_ms = 0;

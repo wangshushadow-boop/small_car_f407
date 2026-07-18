@@ -21,6 +21,9 @@ class CarClient {
   bool SendStop();
   bool SendDrive(std::int16_t forward, std::int16_t turn);
   bool SendServo(std::uint16_t left_us, std::uint16_t right_us);
+  bool SendOdomReset();
+  bool SendParamSet(std::uint8_t param_id, std::int32_t value);
+  bool SendParamGet(std::uint8_t param_id);
 
   void Poll();
 
@@ -29,6 +32,8 @@ class CarClient {
   std::optional<ImuRaw> GetImuRaw() const;
   std::optional<DeviceStatus> GetDeviceStatus() const;
   std::optional<Odometry> GetOdometry() const;
+  std::optional<OdometryDebug> GetOdometryDebug() const;
+  std::optional<ParamValue> GetParamValue() const;
   std::optional<Ack> GetLastAck() const;
 
  private:
@@ -44,6 +49,8 @@ class CarClient {
   std::optional<ImuRaw> imu_raw_;
   std::optional<DeviceStatus> device_status_;
   std::optional<Odometry> odometry_;
+  std::optional<OdometryDebug> odometry_debug_;
+  std::optional<ParamValue> param_value_;
   std::optional<Ack> last_ack_;
 };
 

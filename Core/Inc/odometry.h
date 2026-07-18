@@ -24,7 +24,12 @@
  * 2042 / 15600 = 0.1309 mm/tick。
  * 后续实测直行 1000 mm 后，只需要微调这两个宏。
  */
-#define ODOMETRY_MM_PER_TICK_NUM 2042
+/*
+ * 2026-07-18 first floor calibration:
+ * real straight distance 1000 mm, odometry reported 876 mm.
+ * 2042 * 1000 / 876 = 2398, so use 2398 / 15600 mm/tick first.
+ */
+#define ODOMETRY_MM_PER_TICK_NUM 2410
 #define ODOMETRY_MM_PER_TICK_DEN 15600
 
 /*

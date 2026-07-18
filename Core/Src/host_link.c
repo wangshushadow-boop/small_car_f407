@@ -6,6 +6,7 @@
 
 #include "debug_uart.h"
 #include "main.h"
+#include "odometry.h"
 #include "usart.h"
 
 #define HOST_LINK_LINE_SIZE 64U
@@ -216,6 +217,12 @@ static void ProcessCommand(const char *line)
 
   if (strcmp(command, "odom") == 0)
   {
+    if (strcmp(action, "reset") == 0)
+    {
+      Odometry_Reset();
+      DebugUart_WriteString("[CMD] odom reset\r\n");
+      return;
+    }
     SetLogSwitch("odom", action, DEBUG_LOG_ODOMETRY);
     return;
   }
@@ -267,7 +274,7 @@ static bool SetLogSwitch(const char *name, const char *action, uint32_t category
 static void PrintLogHelp(void)
 {
   DebugUart_WriteString(
-      "[CMD] commands: ping, imu on/off, pad on/off, servo on/off, motor on/off, enc on/off, ultra on/off, odom on/off, status, help\r\n");
+      "[CMD] commands: ping, imu on/off, pad on/off, servo on/off, motor on/off, enc on/off, ultra on/off, odom on/off, odom reset, status, help\r\n");
 }
 
 static void PrintLogStatus(void)

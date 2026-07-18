@@ -69,6 +69,21 @@ struct Odometry {
   bool calibrated = false;
 };
 
+struct OdometryDebug {
+  std::uint32_t mcu_time_ms = 0;
+  std::int16_t left_speed_mm_s = 0;
+  std::int16_t right_speed_mm_s = 0;
+  std::int16_t turn_speed_mm_s = 0;
+  std::int16_t left_delta_mm = 0;
+  std::int16_t right_delta_mm = 0;
+};
+
+struct ParamValue {
+  std::uint32_t mcu_time_ms = 0;
+  std::uint8_t param_id = 0;
+  std::int32_t value = 0;
+};
+
 struct Ack {
   std::uint8_t ack_msg = 0;
   std::uint8_t ack_seq = 0;

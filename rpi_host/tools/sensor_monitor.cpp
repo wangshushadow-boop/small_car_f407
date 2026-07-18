@@ -1,7 +1,9 @@
 #include "small_car_host/car_client.hpp"
+#include "small_car_host/chassis_config.hpp"
 
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -10,6 +12,7 @@ namespace {
 
 struct Options {
   std::string port = "/dev/ttyACM0";
+  std::string config;
   int baudrate = 115200;
   int interval_ms = 100;
   bool show_imu = false;
@@ -23,7 +26,7 @@ struct Options {
 void PrintUsage() {
   std::cout
       << "Usage:\n"
-      << "  sensor_monitor [--port /dev/ttyACM0] [--all]\n"
+      << "  sensor_monitor [--port /dev/ttyACM0] [--config <path>] [--all]\n"
       << "  sensor_monitor [--imu] [--enc] [--ultra] [--chassis] [--device] [--odom]\n"
       << "  sensor_monitor [--interval-ms 100]\n\n"
       << "Examples:\n"
@@ -41,6 +44,8 @@ bool ParseArgs(int argc, char** argv, Options* options) {
     }
     if (arg == "--port" && i + 1 < argc) {
       options->port = argv[++i];
+    } else if (arg == "--config" && i + 1 < argc) {
+      options->config = argv[++i];
     } else if (arg == "--baud" && i + 1 < argc) {
       options->baudrate = std::stoi(argv[++i]);
     } else if (arg == "--interval-ms" && i + 1 < argc) {
@@ -153,6 +158,15 @@ void PrintOdometry(const small_car::Odometry& odometry) {
             << " calibrated=" << odometry.calibrated << "\n";
 }
 
+void PrintOdometryDebug(const small_car::OdometryDebug& odometry_debug) {
+  std::cout << "[ODOM_WHEEL] t=" << odometry_debug.mcu_time_ms
+            << " L=" << odometry_debug.left_speed_mm_s << " mm/s"
+            << " R=" << odometry_debug.right_speed_mm_s << " mm/s"
+            << " turn=" << odometry_debug.turn_speed_mm_s << " mm/s"
+            << " dL=" << odometry_debug.left_delta_mm << " mm"
+            << " dR=" << odometry_debug.right_delta_mm << " mm\n";
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -167,6 +181,28 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  const std::string config_path = options.config.empty()
+                                      ? small_car::DefaultChassisConfigPath(argv[0])
+                                      : options.config;
+  try {
+    const auto parameters = small_car::LoadChassisConfig(config_path);
+    std::string error;
+    if (!small_car::ApplyChassisConfig(
+            &client, parameters, std::chrono::milliseconds(800), &error)) {
+      std::cerr << "apply config failed: " << error << "\n";
+      return 3;
+    }
+    std::cout << "[CONFIG] source=" << config_path << "\n";
+    for (const auto& parameter : parameters) {
+      std::cout << "[CONFIG] id=" << static_cast<int>(parameter.id)
+                << " name=" << parameter.name << " value=" << parameter.value << "\n";
+    }
+    std::cout << "[CONFIG] applied=" << parameters.size() << " verified=1\n";
+  } catch (const std::exception& error) {
+    std::cerr << "load config failed: " << error.what() << "\n";
+    return 3;
+  }
+
   std::cout << "[MON] port=" << options.port << " baud=" << options.baudrate << "\n";
   std::cout << "[MON] interval=" << options.interval_ms << " ms\n";
   std::cout << "[MON] press Ctrl+C to stop\n";
@@ -177,13 +213,16 @@ int main(int argc, char** argv) {
   std::uint32_t last_ultrasonic_time = 0;
   std::uint32_t last_device_time = 0;
   std::uint32_t last_odometry_time = 0;
+  std::uint32_t last_odometry_debug_time = 0;
   bool seen_odometry = false;
+  bool seen_odometry_debug = false;
   auto last_imu_print = std::chrono::steady_clock::now();
   auto last_encoder_print = last_imu_print;
   auto last_chassis_print = last_imu_print;
   auto last_ultrasonic_print = last_imu_print;
   auto last_device_print = last_imu_print;
   auto last_odometry_print = last_imu_print;
+  auto last_odometry_debug_print = last_imu_print;
 
   while (true) {
     client.Poll();
@@ -241,6 +280,15 @@ int main(int argc, char** argv) {
           seen_odometry = true;
           last_odometry_time = odometry->mcu_time_ms;
           PrintOdometry(*odometry);
+        }
+      }
+      if (const auto odometry_debug = client.GetOdometryDebug()) {
+        if ((!seen_odometry_debug ||
+             odometry_debug->mcu_time_ms != last_odometry_debug_time) &&
+            CanPrint(now, &last_odometry_debug_print, options.interval_ms)) {
+          seen_odometry_debug = true;
+          last_odometry_debug_time = odometry_debug->mcu_time_ms;
+          PrintOdometryDebug(*odometry_debug);
         }
       }
     }

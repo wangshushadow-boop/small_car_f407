@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include "debug_uart.h"
+#include "chassis_params.h"
 #include "main.h"
+#include "odometry.h"
 #include "servo.h"
 #include "usart.h"
 
@@ -27,6 +29,13 @@
 #define RASPI_MSG_DEVICE_STATUS 0x84U
 #define RASPI_MSG_ACK 0x85U
 #define RASPI_MSG_ODOMETRY 0x86U
+#define RASPI_MSG_ODOMETRY_DEBUG 0x87U
+#define RASPI_MSG_PARAM_VALUE 0x88U
+
+#define RASPI_PARAM_LEGACY_ODOMETRY_RESET 1U
+#define RASPI_PARAM_OP_SET 1U
+#define RASPI_PARAM_OP_GET 2U
+#define RASPI_PARAM_OP_ODOMETRY_RESET 3U
 
 #define RASPI_MODE_STOP 0U
 #define RASPI_MODE_VELOCITY 1U
@@ -73,6 +82,7 @@ static void ResetParser(void);
 static void HandleFrame(uint8_t msg, uint8_t seq, const uint8_t *payload, uint8_t length);
 static void HandleControlCommand(uint8_t seq, const uint8_t *payload, uint8_t length);
 static void HandleServoCommand(uint8_t seq, const uint8_t *payload, uint8_t length);
+static void HandleParamCommand(uint8_t seq, const uint8_t *payload, uint8_t length);
 static void SendFrame(uint8_t msg, const uint8_t *payload, uint8_t length);
 static void SendAck(uint8_t ack_msg, uint8_t ack_seq, uint8_t result);
 static uint16_t Crc16CcittFalse(const uint8_t *data, uint16_t length);
@@ -81,8 +91,11 @@ static uint16_t ReadU16Le(const uint8_t *data);
 static int16_t ReadI16Le(const uint8_t *data);
 static void WriteU16Le(uint8_t *data, uint16_t value);
 static void WriteI16Le(uint8_t *data, int16_t value);
+static uint32_t ReadU32Le(const uint8_t *data);
+static int32_t ReadI32Le(const uint8_t *data);
 static void WriteU32Le(uint8_t *data, uint32_t value);
 static void WriteI32Le(uint8_t *data, int32_t value);
+static void SendParamValue(uint8_t param_id, int32_t value);
 
 void RaspiLink_Init(void)
 {
@@ -202,6 +215,23 @@ void RaspiLink_SendOdometry(uint32_t odom_time_ms,
   payload[16] = calibrated ? 1U : 0U;
   payload[17] = 0U;
   SendFrame(RASPI_MSG_ODOMETRY, payload, sizeof(payload));
+}
+
+void RaspiLink_SendOdometryDebug(uint32_t odom_time_ms,
+                                 int16_t left_speed_mm_s,
+                                 int16_t right_speed_mm_s,
+                                 int16_t turn_speed_mm_s,
+                                 int16_t left_delta_mm,
+                                 int16_t right_delta_mm)
+{
+  uint8_t payload[14] = {0};
+  WriteU32Le(&payload[0], odom_time_ms);
+  WriteI16Le(&payload[4], left_speed_mm_s);
+  WriteI16Le(&payload[6], right_speed_mm_s);
+  WriteI16Le(&payload[8], turn_speed_mm_s);
+  WriteI16Le(&payload[10], left_delta_mm);
+  WriteI16Le(&payload[12], right_delta_mm);
+  SendFrame(RASPI_MSG_ODOMETRY_DEBUG, payload, sizeof(payload));
 }
 
 void RaspiLink_OnUartRxCpltCallback(UART_HandleTypeDef *huart)
@@ -356,6 +386,8 @@ static void HandleFrame(uint8_t msg, uint8_t seq, const uint8_t *payload, uint8_
       SendAck(msg, seq, (length == 4U) ? RASPI_ACK_OK : RASPI_ACK_LEN_ERROR);
       break;
     case RASPI_MSG_PARAM:
+      HandleParamCommand(seq, payload, length);
+      break;
     default:
       SendAck(msg, seq, RASPI_ACK_UNSUPPORTED);
       break;
@@ -411,6 +443,61 @@ static void HandleServoCommand(uint8_t seq, const uint8_t *payload, uint8_t leng
   SendAck(RASPI_MSG_SERVO, seq, RASPI_ACK_OK);
 }
 
+static void HandleParamCommand(uint8_t seq, const uint8_t *payload, uint8_t length)
+{
+  if (payload == NULL)
+  {
+    SendAck(RASPI_MSG_PARAM, seq, RASPI_ACK_LEN_ERROR);
+    return;
+  }
+
+  /*
+   * payload[0..3] 是树莓派发送时间，当前只保留给后续时间同步使用。
+   * payload[4] 是参数子命令，1 表示清零里程计并重新校准陀螺仪零偏。
+   */
+  if ((length == 5U) &&
+      ((payload[4] == RASPI_PARAM_LEGACY_ODOMETRY_RESET) ||
+       (payload[4] == RASPI_PARAM_OP_ODOMETRY_RESET)))
+  {
+    Odometry_Reset();
+    SendAck(RASPI_MSG_PARAM, seq, RASPI_ACK_OK);
+    return;
+  }
+
+  if ((length == 10U) && (payload[4] == RASPI_PARAM_OP_SET))
+  {
+    const uint8_t param_id = payload[5];
+    const int32_t value = ReadI32Le(&payload[6]);
+    if (ChassisParams_Set((ChassisParamId)param_id, value))
+    {
+      SendAck(RASPI_MSG_PARAM, seq, RASPI_ACK_OK);
+    }
+    else
+    {
+      SendAck(RASPI_MSG_PARAM, seq, RASPI_ACK_UNSUPPORTED);
+    }
+    return;
+  }
+
+  if ((length == 6U) && (payload[4] == RASPI_PARAM_OP_GET))
+  {
+    const uint8_t param_id = payload[5];
+    int32_t value = 0;
+    if (ChassisParams_GetValue((ChassisParamId)param_id, &value))
+    {
+      SendParamValue(param_id, value);
+      SendAck(RASPI_MSG_PARAM, seq, RASPI_ACK_OK);
+    }
+    else
+    {
+      SendAck(RASPI_MSG_PARAM, seq, RASPI_ACK_UNSUPPORTED);
+    }
+    return;
+  }
+
+  SendAck(RASPI_MSG_PARAM, seq, RASPI_ACK_LEN_ERROR);
+}
+
 static void SendFrame(uint8_t msg, const uint8_t *payload, uint8_t length)
 {
   if ((length > RASPI_PAYLOAD_MAX_SIZE) ||
@@ -445,6 +532,15 @@ static void SendAck(uint8_t ack_msg, uint8_t ack_seq, uint8_t result)
 {
   uint8_t payload[3] = {ack_msg, ack_seq, result};
   SendFrame(RASPI_MSG_ACK, payload, sizeof(payload));
+}
+
+static void SendParamValue(uint8_t param_id, int32_t value)
+{
+  uint8_t payload[9] = {0};
+  WriteU32Le(&payload[0], HAL_GetTick());
+  payload[4] = param_id;
+  WriteI32Le(&payload[5], value);
+  SendFrame(RASPI_MSG_PARAM_VALUE, payload, sizeof(payload));
 }
 
 static uint16_t Crc16CcittFalse(const uint8_t *data, uint16_t length)
@@ -486,9 +582,20 @@ static uint16_t ReadU16Le(const uint8_t *data)
   return (uint16_t)data[0] | ((uint16_t)data[1] << 8U);
 }
 
+static uint32_t ReadU32Le(const uint8_t *data)
+{
+  return (uint32_t)data[0] | ((uint32_t)data[1] << 8U) |
+         ((uint32_t)data[2] << 16U) | ((uint32_t)data[3] << 24U);
+}
+
 static int16_t ReadI16Le(const uint8_t *data)
 {
   return (int16_t)ReadU16Le(data);
+}
+
+static int32_t ReadI32Le(const uint8_t *data)
+{
+  return (int32_t)ReadU32Le(data);
 }
 
 static void WriteU16Le(uint8_t *data, uint16_t value)

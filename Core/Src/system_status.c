@@ -200,6 +200,7 @@ static void ReportImuToHost(void)
 static void ReportOdometryToHost(void)
 {
   OdometrySample odometry = Odometry_GetSample();
+  OdometryDebug odometry_debug = Odometry_GetDebug();
 
   RaspiLink_SendOdometry(odometry.time_ms,
                          odometry.distance_mm,
@@ -207,6 +208,12 @@ static void ReportOdometryToHost(void)
                          odometry.yaw_mdeg,
                          odometry.yaw_rate_mdeg_s,
                          odometry.calibrated);
+  RaspiLink_SendOdometryDebug(odometry.time_ms,
+                              odometry_debug.left_speed_mm_s,
+                              odometry_debug.right_speed_mm_s,
+                              odometry_debug.turn_speed_mm_s,
+                              odometry_debug.left_delta_mm,
+                              odometry_debug.right_delta_mm);
 
   DebugUart_PrintfIf(DEBUG_LOG_ODOMETRY,
                      "[ODOM] t=%lu dist=%ld speed=%d yaw=%ld rate=%d cal=%d\r\n",
@@ -216,6 +223,14 @@ static void ReportOdometryToHost(void)
                      odometry.yaw_mdeg,
                      odometry.yaw_rate_mdeg_s,
                      odometry.calibrated ? 1 : 0);
+
+  DebugUart_PrintfIf(DEBUG_LOG_ODOMETRY,
+                     "[ODOM_WHEEL] L=%d R=%d turn=%d dL=%d dR=%d\r\n",
+                     odometry_debug.left_speed_mm_s,
+                     odometry_debug.right_speed_mm_s,
+                     odometry_debug.turn_speed_mm_s,
+                     odometry_debug.left_delta_mm,
+                     odometry_debug.right_delta_mm);
 }
 
 static void ReportDeviceToHost(void)

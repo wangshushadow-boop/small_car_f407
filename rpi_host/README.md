@@ -55,10 +55,22 @@ ctest --test-dir build --output-on-failure
 ./build/small_car_host_cli --port /dev/ttyACM0 servo 1500 1500
 ```
 
+清零里程计：
+
+```bash
+./build/small_car_host_cli --port /dev/ttyACM0 odom-reset
+```
+
 远程查看传感器日志：
 
 ```bash
-./build-sensor-monitor/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra --odom
+./build/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra --odom
+```
+
+只查看编码器和里程计：
+
+```bash
+./build/sensor_monitor --port /dev/ttyACM0 --enc --odom
 ```
 
 ## 可选工具
@@ -172,3 +184,40 @@ cp ~/small_car_f407/rpi_host/systemd/hermes-car-voice.service \
 systemctl --user daemon-reload
 systemctl --user enable --now hermes-car-voice.service
 ```
+
+## 运行时参数调试
+
+已确认的参数记录在 `config/chassis_params.yaml`，该文件应随代码提交到 Git。
+上位机每次启动都会读取整份文件、批量下发全部参数并逐项回读校验：
+
+```bash
+./build/small_car_host_cli --port /dev/ttyACM0
+```
+
+`sensor_monitor` 启动时也会执行相同的加载和校验流程。
+
+调整参数时只修改 `config/chassis_params.yaml` 并提交 Git。再次运行一键同步脚本后，
+新值会自动同步到树莓派并应用到 MCU，不再提供单参数读写命令。
+
+| ID | 含义 |
+| ---: | --- |
+| 1 | 里程计比例分子，分母固定为1000 |
+| 2 | 手柄前进起步输出 |
+| 3 | 手柄后退起步输出 |
+| 4 | 手柄前后最大输出 |
+| 5 | 手柄转向起步输出 |
+| 6 | 手柄转向最大输出 |
+| 7 | 超声避障距离阈值，单位mm |
+
+# 同步并编译
+
+源码在 Windows 电脑上修改后，在仓库根目录运行：
+
+```powershell
+.\scripts\sync_rpi_host.ps1
+```
+
+脚本会依次同步 `rpi_host` 源码，并在树莓派上执行 CMake 编译。默认目标为
+`ubuntu@192.168.3.85:/home/ubuntu/small_car_f407/rpi_host`。
+远端 `build` 是生成目录，每次同步后都会清理并重新构建，避免混用 Windows
+和树莓派的 CMake 缓存。

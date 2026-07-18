@@ -115,6 +115,82 @@ void TestDecodeOdometry() {
   Expect(odom->calibrated, "odometry calibrated mismatch");
 }
 
+void TestDecodeOdometryDebug() {
+  const auto raw = small_car::EncodeFrame(
+      static_cast<std::uint8_t>(small_car::Msg::kOdometryDebug),
+      5,
+      {
+          0xE8, 0x03, 0x00, 0x00,  // t=1000
+          0x64, 0x00,              // left=100
+          0x78, 0x00,              // right=120
+          0x14, 0x00,              // turn=20
+          0x02, 0x00,              // dL=2
+          0x03, 0x00,              // dR=3
+      });
+  small_car::FrameParser parser;
+  const auto frames = parser.Feed(raw);
+  const auto decoded = small_car::DecodePayload(frames[0]);
+  const auto* odom_debug = std::get_if<small_car::OdometryDebug>(&decoded.value());
+  Expect(odom_debug != nullptr, "odometry debug type mismatch");
+  Expect(odom_debug->mcu_time_ms == 1000, "odometry debug time mismatch");
+  Expect(odom_debug->left_speed_mm_s == 100, "left speed mismatch");
+  Expect(odom_debug->right_speed_mm_s == 120, "right speed mismatch");
+  Expect(odom_debug->turn_speed_mm_s == 20, "turn speed mismatch");
+  Expect(odom_debug->left_delta_mm == 2, "left delta mismatch");
+  Expect(odom_debug->right_delta_mm == 3, "right delta mismatch");
+}
+
+void TestOdomResetFrame() {
+  const auto raw = small_car::MakeOdomResetFrame(6, 1000);
+  small_car::FrameParser parser;
+  const auto frames = parser.Feed(raw);
+  Expect(frames.size() == 1, "odom reset frame parse failed");
+  Expect(frames[0].msg == static_cast<std::uint8_t>(small_car::Msg::kParam),
+         "odom reset msg mismatch");
+  Expect(frames[0].payload.size() == 5, "odom reset payload size mismatch");
+  Expect(frames[0].payload[4] == 1, "odom reset param mismatch");
+}
+
+void TestParamSetGetFrame() {
+  const auto set_raw = small_car::MakeParamSetFrame(7, 1, 2410, 1000);
+  small_car::FrameParser parser;
+  const auto set_frames = parser.Feed(set_raw);
+  Expect(set_frames.size() == 1, "param set frame parse failed");
+  Expect(set_frames[0].msg == static_cast<std::uint8_t>(small_car::Msg::kParam),
+         "param set msg mismatch");
+  Expect(set_frames[0].payload.size() == 10, "param set payload size mismatch");
+  Expect(set_frames[0].payload[4] == 1, "param set op mismatch");
+  Expect(set_frames[0].payload[5] == 1, "param set id mismatch");
+  Expect(set_frames[0].payload[6] == 0x6A && set_frames[0].payload[7] == 0x09,
+         "param set value mismatch");
+
+  const auto get_raw = small_car::MakeParamGetFrame(8, 1, 1000);
+  const auto get_frames = parser.Feed(get_raw);
+  Expect(get_frames.size() == 1, "param get frame parse failed");
+  Expect(get_frames[0].payload.size() == 6, "param get payload size mismatch");
+  Expect(get_frames[0].payload[4] == 2, "param get op mismatch");
+  Expect(get_frames[0].payload[5] == 1, "param get id mismatch");
+}
+
+void TestDecodeParamValue() {
+  const auto raw = small_car::EncodeFrame(
+      static_cast<std::uint8_t>(small_car::Msg::kParamValue),
+      9,
+      {
+          0xE8, 0x03, 0x00, 0x00,  // t=1000
+          0x01,                    // param id
+          0x6A, 0x09, 0x00, 0x00,  // value=2410
+      });
+  small_car::FrameParser parser;
+  const auto frames = parser.Feed(raw);
+  const auto decoded = small_car::DecodePayload(frames[0]);
+  const auto* param = std::get_if<small_car::ParamValue>(&decoded.value());
+  Expect(param != nullptr, "param value type mismatch");
+  Expect(param->mcu_time_ms == 1000, "param value time mismatch");
+  Expect(param->param_id == 1, "param value id mismatch");
+  Expect(param->value == 2410, "param value mismatch");
+}
+
 void TestDriveClamp() {
   const auto raw = small_car::MakeDriveFrame(1, 2000, -2000, 1);
   small_car::FrameParser parser;
@@ -135,6 +211,10 @@ int main() {
     TestBadCrcDropped();
     TestDecodeChassis();
     TestDecodeOdometry();
+    TestDecodeOdometryDebug();
+    TestOdomResetFrame();
+    TestParamSetGetFrame();
+    TestDecodeParamValue();
     TestDriveClamp();
   } catch (const std::exception& error) {
     std::cerr << error.what() << "\n";

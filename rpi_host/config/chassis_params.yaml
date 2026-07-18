@@ -1,0 +1,25 @@
+# 底盘标定参数记录。
+# 每次确认参数后同步修改本文件并提交 Git，避免实验结果丢失。
+# 上位机每次启动时都会加载全部参数、下发到 MCU 并回读校验。
+small_car:
+  ros__parameters:
+    # 参数 ID 1：里程计每个编码器计数对应毫米数的分子，分母固定为 1000。
+    odom_mm_per_tick_num: 2410
+
+    # 参数 ID 2：手柄前进方向开始驱动时的电机输出，范围 0-1000。
+    gamepad_forward_start: 550
+
+    # 参数 ID 3：手柄后退方向开始驱动时的电机输出，范围 0-1000。
+    gamepad_reverse_start: 320
+
+    # 参数 ID 4：手柄前后方向最大电机输出，范围 0-1000。
+    gamepad_drive_max: 800
+
+    # 参数 ID 5：手柄转向开始生效时的转向输出，范围 0-1000。
+    gamepad_turn_start: 260
+
+    # 参数 ID 6：手柄转向最大输出，范围 0-1000。
+    gamepad_turn_max: 550
+
+    # 参数 ID 7：超声避障距离阈值，单位为毫米。
+    ultra_near_distance_mm: 200

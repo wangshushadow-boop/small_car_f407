@@ -11,6 +11,9 @@ namespace {
 constexpr std::size_t kHeaderSize = 6;
 constexpr std::size_t kMinFrameSize = 8;
 constexpr std::uint8_t kSyncBytes[] = {kSync0, kSync1};
+constexpr std::uint8_t kParamOdomReset = 1;
+constexpr std::uint8_t kParamOpSet = 1;
+constexpr std::uint8_t kParamOpGet = 2;
 
 // 协议统一使用小端序，和 MCU 侧结构体拆包保持一致。
 void PutU16(std::vector<std::uint8_t>* data, std::uint16_t value) {
@@ -27,6 +30,10 @@ void PutU32(std::vector<std::uint8_t>* data, std::uint32_t value) {
   data->push_back(static_cast<std::uint8_t>((value >> 8) & 0xFF));
   data->push_back(static_cast<std::uint8_t>((value >> 16) & 0xFF));
   data->push_back(static_cast<std::uint8_t>((value >> 24) & 0xFF));
+}
+
+void PutI32(std::vector<std::uint8_t>* data, std::int32_t value) {
+  PutU32(data, static_cast<std::uint32_t>(value));
 }
 
 std::uint16_t ReadU16(const std::vector<std::uint8_t>& data, std::size_t offset) {
@@ -163,6 +170,36 @@ std::vector<std::uint8_t> MakeServoFrame(std::uint8_t seq,
   return EncodeFrame(static_cast<std::uint8_t>(Msg::kServo), seq, payload);
 }
 
+std::vector<std::uint8_t> MakeOdomResetFrame(std::uint8_t seq,
+                                             std::uint32_t host_time_ms) {
+  std::vector<std::uint8_t> payload;
+  PutU32(&payload, host_time_ms);
+  payload.push_back(kParamOdomReset);
+  return EncodeFrame(static_cast<std::uint8_t>(Msg::kParam), seq, payload);
+}
+
+std::vector<std::uint8_t> MakeParamSetFrame(std::uint8_t seq,
+                                            std::uint8_t param_id,
+                                            std::int32_t value,
+                                            std::uint32_t host_time_ms) {
+  std::vector<std::uint8_t> payload;
+  PutU32(&payload, host_time_ms);
+  payload.push_back(kParamOpSet);
+  payload.push_back(param_id);
+  PutI32(&payload, value);
+  return EncodeFrame(static_cast<std::uint8_t>(Msg::kParam), seq, payload);
+}
+
+std::vector<std::uint8_t> MakeParamGetFrame(std::uint8_t seq,
+                                            std::uint8_t param_id,
+                                            std::uint32_t host_time_ms) {
+  std::vector<std::uint8_t> payload;
+  PutU32(&payload, host_time_ms);
+  payload.push_back(kParamOpGet);
+  payload.push_back(param_id);
+  return EncodeFrame(static_cast<std::uint8_t>(Msg::kParam), seq, payload);
+}
+
 std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
   const auto& payload = frame.payload;
   // 这里只解析 MCU 会上传给树莓派的消息；树莓派下发的命令不需要反向解析。
@@ -223,6 +260,25 @@ std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
           ReadI32(payload, 10),
           ReadI16(payload, 14),
           payload[16] != 0,
+      };
+    }
+    case Msg::kOdometryDebug: {
+      RequirePayloadSize(payload, 14);
+      return OdometryDebug{
+          ReadU32(payload, 0),
+          ReadI16(payload, 4),
+          ReadI16(payload, 6),
+          ReadI16(payload, 8),
+          ReadI16(payload, 10),
+          ReadI16(payload, 12),
+      };
+    }
+    case Msg::kParamValue: {
+      RequirePayloadSize(payload, 9);
+      return ParamValue{
+          ReadU32(payload, 0),
+          payload[4],
+          ReadI32(payload, 5),
       };
     }
     default:
@@ -314,6 +370,19 @@ std::vector<std::uint8_t> PacketCodec::Drive(std::int16_t forward, std::int16_t 
 std::vector<std::uint8_t> PacketCodec::Servo(std::uint16_t left_us,
                                              std::uint16_t right_us) {
   return MakeServoFrame(NextSeq(), left_us, right_us);
+}
+
+std::vector<std::uint8_t> PacketCodec::OdomReset() {
+  return MakeOdomResetFrame(NextSeq());
+}
+
+std::vector<std::uint8_t> PacketCodec::ParamSet(std::uint8_t param_id,
+                                                std::int32_t value) {
+  return MakeParamSetFrame(NextSeq(), param_id, value);
+}
+
+std::vector<std::uint8_t> PacketCodec::ParamGet(std::uint8_t param_id) {
+  return MakeParamGetFrame(NextSeq(), param_id);
 }
 
 std::uint8_t PacketCodec::NextSeq() {

@@ -2,12 +2,29 @@
 
 #include <stddef.h>
 
+#include "chassis_params.h"
 #include "debug_uart.h"
 #include "main.h"
 
+/* 超声测距触发周期，单位 ms。数值越小测距越频繁，但也更占用任务时间。 */
 #define ULTRASONIC_TRIGGER_PERIOD_MS 100U
+
+/* ECHO 最大等待时间，单位 us。超过该时间认为本次测距超时无效。 */
 #define ULTRASONIC_ECHO_TIMEOUT_US 40000U
+
+/* TRIG 触发脉冲宽度，单位 us。HC-SR04 类模块通常要求至少 10us。 */
 #define ULTRASONIC_TRIGGER_PULSE_US 10U
+
+/*
+ * 前方避障阈值。
+ *
+ * 当超声测距有效且距离小于该值时，control_mux.c 会禁止继续向前，
+ * 但仍允许后退和转向。因此如果出现“向后能走、向前不走”，除了检查手柄输出，
+ * 也要看 sensor_monitor 的 ultra 距离是否小于这里的阈值。
+ *
+ * 标定或室内窄空间调试时，如果确认前方安全但频繁误触发，可以临时改小，
+ * 例如 200 -> 80。正式运行时再按实际安全距离调回合适值。
+ */
 #define ULTRASONIC_NEAR_DISTANCE_MM 200U
 
 /* 这些变量会在 EXTI 中断和普通任务里同时访问，所以使用 volatile。 */
@@ -124,7 +141,8 @@ bool Ultrasonic_IsObstacleNear(void)
     return false;
   }
 
-  return g_distance_mm < ULTRASONIC_NEAR_DISTANCE_MM;
+  const ChassisParams params = ChassisParams_Get();
+  return g_distance_mm < (uint16_t)params.ultra_near_distance_mm;
 }
 
 void Ultrasonic_OnEchoEdge(uint16_t gpio_pin)

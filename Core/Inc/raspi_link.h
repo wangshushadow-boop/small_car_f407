@@ -31,6 +31,12 @@ void RaspiLink_SendOdometry(uint32_t odom_time_ms,
                             int32_t yaw_mdeg,
                             int16_t yaw_rate_mdeg_s,
                             bool calibrated);
+void RaspiLink_SendOdometryDebug(uint32_t odom_time_ms,
+                                 int16_t left_speed_mm_s,
+                                 int16_t right_speed_mm_s,
+                                 int16_t turn_speed_mm_s,
+                                 int16_t left_delta_mm,
+                                 int16_t right_delta_mm);
 void RaspiLink_OnUartRxCpltCallback(UART_HandleTypeDef *huart);
 
 #endif  // RASPI_LINK_H_

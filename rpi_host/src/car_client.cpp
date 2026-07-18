@@ -31,6 +31,18 @@ bool CarClient::SendServo(std::uint16_t left_us, std::uint16_t right_us) {
   return SendBytes(codec_.Servo(left_us, right_us));
 }
 
+bool CarClient::SendOdomReset() {
+  return SendBytes(codec_.OdomReset());
+}
+
+bool CarClient::SendParamSet(std::uint8_t param_id, std::int32_t value) {
+  return SendBytes(codec_.ParamSet(param_id, value));
+}
+
+bool CarClient::SendParamGet(std::uint8_t param_id) {
+  return SendBytes(codec_.ParamGet(param_id));
+}
+
 void CarClient::Poll() {
   // 上位机主循环应周期调用 Poll()。这里一次最多读 256 字节，
   // FrameParser 会自动处理半包、粘包和噪声。
@@ -60,6 +72,14 @@ std::optional<Odometry> CarClient::GetOdometry() const {
   return odometry_;
 }
 
+std::optional<OdometryDebug> CarClient::GetOdometryDebug() const {
+  return odometry_debug_;
+}
+
+std::optional<ParamValue> CarClient::GetParamValue() const {
+  return param_value_;
+}
+
 std::optional<Ack> CarClient::GetLastAck() const {
   return last_ack_;
 }
@@ -86,6 +106,10 @@ void CarClient::HandleFrame(const Frame& frame) {
     device_status_ = *value;
   } else if (const auto* value = std::get_if<Odometry>(&decoded.value())) {
     odometry_ = *value;
+  } else if (const auto* value = std::get_if<OdometryDebug>(&decoded.value())) {
+    odometry_debug_ = *value;
+  } else if (const auto* value = std::get_if<ParamValue>(&decoded.value())) {
+    param_value_ = *value;
   } else if (const auto* value = std::get_if<Ack>(&decoded.value())) {
     last_ack_ = *value;
   }

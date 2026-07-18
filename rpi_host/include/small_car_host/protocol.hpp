@@ -27,6 +27,8 @@ enum class Msg : std::uint8_t {
   kDeviceStatus = 0x84,
   kAck = 0x85,
   kOdometry = 0x86,
+  kOdometryDebug = 0x87,
+  kParamValue = 0x88,
 };
 
 struct Frame {
@@ -36,7 +38,8 @@ struct Frame {
 };
 
 using DecodedMessage =
-    std::variant<ChassisStatus, EncoderDelta, ImuRaw, DeviceStatus, Ack, Odometry>;
+    std::variant<ChassisStatus, EncoderDelta, ImuRaw, DeviceStatus, Ack, Odometry,
+                 OdometryDebug, ParamValue>;
 
 std::uint16_t Crc16CcittFalse(const std::uint8_t* data, std::size_t size);
 std::uint16_t Crc16CcittFalse(const std::vector<std::uint8_t>& data);
@@ -59,6 +62,15 @@ std::vector<std::uint8_t> MakeServoFrame(std::uint8_t seq,
                                          std::uint16_t left_us,
                                          std::uint16_t right_us,
                                          std::uint32_t host_time_ms = NowMs());
+std::vector<std::uint8_t> MakeOdomResetFrame(std::uint8_t seq,
+                                             std::uint32_t host_time_ms = NowMs());
+std::vector<std::uint8_t> MakeParamSetFrame(std::uint8_t seq,
+                                            std::uint8_t param_id,
+                                            std::int32_t value,
+                                            std::uint32_t host_time_ms = NowMs());
+std::vector<std::uint8_t> MakeParamGetFrame(std::uint8_t seq,
+                                            std::uint8_t param_id,
+                                            std::uint32_t host_time_ms = NowMs());
 
 std::optional<DecodedMessage> DecodePayload(const Frame& frame);
 
@@ -78,6 +90,9 @@ class PacketCodec {
   std::vector<std::uint8_t> Stop();
   std::vector<std::uint8_t> Drive(std::int16_t forward, std::int16_t turn);
   std::vector<std::uint8_t> Servo(std::uint16_t left_us, std::uint16_t right_us);
+  std::vector<std::uint8_t> OdomReset();
+  std::vector<std::uint8_t> ParamSet(std::uint8_t param_id, std::int32_t value);
+  std::vector<std::uint8_t> ParamGet(std::uint8_t param_id);
 
  private:
   std::uint8_t NextSeq();

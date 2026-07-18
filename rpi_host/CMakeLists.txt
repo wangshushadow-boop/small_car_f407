@@ -17,13 +17,18 @@ target_include_directories(small_car_protocol
 )
 
 if(UNIX)
+  find_package(yaml-cpp REQUIRED)
+
   add_library(small_car_host
     src/audio_device.cpp
     src/car_client.cpp
+    src/chassis_config.cpp
     src/serial_port.cpp
   )
   target_link_libraries(small_car_host
-    PUBLIC small_car_protocol
+    PUBLIC
+      small_car_protocol
+      yaml-cpp
   )
   find_package(ALSA REQUIRED)
   target_link_libraries(small_car_host
