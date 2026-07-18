@@ -25,7 +25,10 @@ from tools.tts_tool import text_to_speech_tool
 LOG = logging.getLogger("hermes-car-voice")
 STOP_REQUESTED = False
 
-SAMPLE_RATE = int(os.getenv("CAR_VOICE_SAMPLE_RATE", "48000"))
+SAMPLE_RATE = int(os.getenv("CAR_VOICE_SAMPLE_RATE", "16000"))
+PLAYBACK_SAMPLE_RATE = int(
+    os.getenv("CAR_VOICE_PLAYBACK_SAMPLE_RATE", "48000")
+)
 BLOCK_MS = int(os.getenv("CAR_VOICE_BLOCK_MS", "100"))
 BLOCK_SIZE = SAMPLE_RATE * BLOCK_MS // 1000
 INPUT_DEVICE = int(os.getenv("CAR_VOICE_INPUT_DEVICE", "0"))
@@ -35,7 +38,9 @@ END_SILENCE_MS = int(os.getenv("CAR_VOICE_END_SILENCE_MS", "1200"))
 IDLE_TIMEOUT_SECONDS = float(os.getenv("CAR_VOICE_IDLE_TIMEOUT_SECONDS", "30"))
 ACTIVE_TIMEOUT_SECONDS = float(os.getenv("CAR_VOICE_ACTIVE_TIMEOUT_SECONDS", "90"))
 MAX_UTTERANCE_SECONDS = float(os.getenv("CAR_VOICE_MAX_UTTERANCE_SECONDS", "20"))
-PLAYBACK_DEVICE = os.getenv("CAR_VOICE_PLAYBACK_DEVICE", "plughw:0,0")
+PLAYBACK_DEVICE = os.getenv(
+    "CAR_VOICE_PLAYBACK_DEVICE", "plughw:CARD=USB,DEV=0"
+)
 HERMES_BIN = os.getenv("HERMES_BIN", "/home/ubuntu/.hermes/venv/bin/hermes")
 RUN_DIR = Path(os.getenv("CAR_VOICE_RUN_DIR", "/home/ubuntu/.hermes/run/car-voice"))
 WAKE_STT_MODEL = os.getenv(
@@ -232,7 +237,7 @@ def speak(text: str) -> None:
             "-i",
             str(mp3_path),
             "-ar",
-            str(SAMPLE_RATE),
+            str(PLAYBACK_SAMPLE_RATE),
             "-ac",
             "2",
             str(wav_path),
@@ -288,10 +293,12 @@ def main() -> int:
   RUN_DIR.mkdir(parents=True, exist_ok=True)
 
   LOG.info(
-      "Voice daemon ready: input=%s, playback=%s, threshold=%s, wake=%s, "
-      "wake_on_any_speech=%s",
+      "Voice daemon ready: input=%s at %s Hz, playback=%s at %s Hz, "
+      "threshold=%s, wake=%s, wake_on_any_speech=%s",
       INPUT_DEVICE,
+      SAMPLE_RATE,
       PLAYBACK_DEVICE,
+      PLAYBACK_SAMPLE_RATE,
       RMS_THRESHOLD,
       ",".join(WAKE_PHRASES),
       WAKE_ON_ANY_SPEECH,

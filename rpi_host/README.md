@@ -76,9 +76,20 @@ cmake --build build-opencv
 ./build/audio_loopback 5 ~/small_car_f407/audio_alsa_test.wav plughw:0,0
 ```
 
+Jabra Speak 410 专用录音回放测试（默认录制 5 秒）：
+
+```bash
+chmod +x ~/small_car_f407/rpi_host/tools/jabra_record_playback.sh
+~/small_car_f407/rpi_host/tools/jabra_record_playback.sh 5
+```
+
+脚本会暂时停止 Hermes 语音服务，使用 16 kHz 单声道录音，转换成 48 kHz 双声道后回放，并在结束时自动恢复原先运行中的服务。录音保存在 `~/jabra-mic-test.wav`，实际播放文件保存在 `~/jabra-mic-test-48k.wav`。
+
 ## Hermes 常驻语音助手
 
 语音助手在树莓派上以 systemd 用户服务运行，启动链路如下：
+
+当前语音硬件为 `Jabra SPEAK 410 USB`：PortAudio 输入设备 `0`，录音采样率 `16000 Hz`；ALSA 播放设备 `plughw:CARD=USB,DEV=0`，播放采样率 `48000 Hz`、双声道。录音与播放采样率必须分开设置，否则回复语音会变速。麦克风增益设置为 `7/7`，扬声器设置为 `8/11`。
 
 ```text
 USB 麦克风 → 本地 VAD → faster-whisper-base → 本地唤醒词匹配

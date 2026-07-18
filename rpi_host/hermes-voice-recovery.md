@@ -41,8 +41,9 @@ USB 麦克风
 | TTS 音色 | `male-qn-qingse` |
 | 待机 STT | `faster-whisper-tiny` |
 | 对话 STT | `faster-whisper-base` |
-| USB 声卡 | ALSA card `0`，`hw:0,0` / `plughw:0,0` |
-| 采样格式 | 48 kHz、单声道录音、16 位 PCM |
+| USB 声卡 | Jabra SPEAK 410 USB，ALSA card `0`，PortAudio device `0`。 |
+| 录音设备 | `hw:0,0`，16 kHz、单声道、16 位 PCM。 |
+| 播放设备 | `plughw:CARD=USB,DEV=0`，48 kHz、双声道、16 位 PCM。 |
 | 当前唤醒方式 | 调试阶段检测到有效语音即可唤醒，推荐说“小车”。 |
 
 ## 2. 系统准备
@@ -246,25 +247,24 @@ amixer -c 0 scontrols
 amixer -c 0 contents
 ```
 
-将麦克风调到硬件最大，开启自动增益，并把扬声器设置为当前验证值：
+Jabra Speak 410 没有独立的 Auto Gain Control 控制项。将麦克风调到硬件最大，并把扬声器设置为当前验证值：
 
 ```bash
-amixer -c 0 sset Mic 147
-amixer -c 0 sset 'Auto Gain Control' on
-amixer -c 0 sset PCM 110
+amixer -c 0 sset Mic 7
+amixer -c 0 sset PCM 8
 sudo alsactl store
 ```
 
 录音测试：
 
 ```bash
-arecord -D hw:0,0 -f S16_LE -r 48000 -c 1 -d 5 /tmp/mic-test.wav
+arecord -D hw:0,0 -f S16_LE -r 16000 -c 1 -d 5 /tmp/mic-test.wav
 ```
 
 播放测试：
 
 ```bash
-aplay -D plughw:0,0 /tmp/mic-test.wav
+aplay -D 'plughw:CARD=USB,DEV=0' /tmp/mic-test.wav
 ```
 
 ## 9. 安装并启动 systemd 服务

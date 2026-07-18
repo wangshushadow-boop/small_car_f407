@@ -12,6 +12,7 @@
 | 命令行工具 | `main.cpp` | 用于临时调试 MCU 通信。 | 已实现。 |
 | 音频模块 | `audio_device.hpp` / `audio_device.cpp` | 使用 ALSA API 录音、播放、保存 WAV。 | 已实现并在树莓派测试通过。 |
 | 音频测试工具 | `tools/audio_loopback.cpp` | 录制一段音频并立即播放。 | 已实现并测试通过。 |
+| Jabra 录音回放测试 | `tools/jabra_record_playback.sh` | 以 16 kHz 录音，转换为 48 kHz 双声道后从 Jabra 回放。 | 已实现。 |
 | 传感器监视工具 | `tools/sensor_monitor.cpp` | 远程查看 IMU、编码器、超声、底盘和设备状态日志。 | 已实现并测试通过。 |
 | OpenCV 相机工具 | `tools/camera_capture.cpp` | 使用 OpenCV 从 USB 摄像头抓取 JPG。 | 已实现并测试过。 |
 | V4L2 相机工具 | `tools/v4l2_capture.cpp` | 不依赖 OpenCV，直接使用 V4L2 抓取 MJPG 或 YUYV。 | 已实现并测试过。 |

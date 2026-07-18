@@ -9,7 +9,9 @@ WorkingDirectory=/home/ubuntu
 Environment=HOME=/home/ubuntu
 Environment=PYTHONUNBUFFERED=1
 Environment=CAR_VOICE_INPUT_DEVICE=0
-Environment=CAR_VOICE_PLAYBACK_DEVICE=plughw:0,0
+Environment=CAR_VOICE_SAMPLE_RATE=16000
+Environment=CAR_VOICE_PLAYBACK_SAMPLE_RATE=48000
+Environment=CAR_VOICE_PLAYBACK_DEVICE=plughw:CARD=USB,DEV=0
 Environment=CAR_VOICE_RMS_THRESHOLD=250
 Environment=CAR_VOICE_WAKE_PHRASES=小车,晓车,校车,像车,想车,小撤
 Environment=CAR_VOICE_WAKE_ON_ANY_SPEECH=true
