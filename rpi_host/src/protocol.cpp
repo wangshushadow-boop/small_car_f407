@@ -252,14 +252,20 @@ std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
       return Ack{payload[0], payload[1], payload[2]};
     }
     case Msg::kOdometry: {
-      RequirePayloadSize(payload, 18);
+      RequirePayloadSize(payload, 40);
       return Odometry{
           ReadU32(payload, 0),
           ReadI32(payload, 4),
-          ReadI16(payload, 8),
-          ReadI32(payload, 10),
-          ReadI16(payload, 14),
-          payload[16] != 0,
+          ReadI32(payload, 8),
+          ReadI32(payload, 12),
+          ReadI32(payload, 16),
+          ReadI16(payload, 20),
+          ReadI32(payload, 22),
+          ReadI32(payload, 26),
+          ReadI32(payload, 30),
+          ReadI32(payload, 34),
+          payload[38] != 0,
+          payload[39] != 0,
       };
     }
     case Msg::kOdometryDebug: {

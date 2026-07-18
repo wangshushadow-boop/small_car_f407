@@ -22,14 +22,13 @@
  *
  * 为了避免在 MCU 中使用浮点，使用整数比例：
  * 2042 / 15600 = 0.1309 mm/tick。
- * 后续实测直行 1000 mm 后，只需要微调这两个宏。
+ * 实测直行后通过 chassis_params.yaml 调整分子，分母保持 15600。
  */
 /*
  * 2026-07-18 first floor calibration:
  * real straight distance 1000 mm, odometry reported 876 mm.
  * 2042 * 1000 / 876 = 2398, so use 2398 / 15600 mm/tick first.
  */
-#define ODOMETRY_MM_PER_TICK_NUM 2410
 #define ODOMETRY_MM_PER_TICK_DEN 15600
 
 /*
@@ -43,20 +42,26 @@
 #define ODOMETRY_MOTOR_D_SIGN -1
 
 /*
- * ICM20948 当前陀螺仪配置为 +/-2000 dps，灵敏度约 16.4 LSB/(deg/s)。
- * 用 x10 避免浮点：16.4 -> 164。
+ * ICM20948 当前陀螺仪配置为 +/-2000 dps，灵敏度由运行时参数提供。
  */
-#define ODOMETRY_GYRO_LSB_PER_DPS_X10 164
+#define ODOMETRY_GYRO_X_SIGN 1
+#define ODOMETRY_GYRO_Y_SIGN 1
 #define ODOMETRY_GYRO_Z_SIGN 1
 #define ODOMETRY_GYRO_BIAS_SAMPLE_COUNT 100U
 
 typedef struct {
   uint32_t time_ms;
+  int32_t x_mm;
+  int32_t y_mm;
+  int32_t z_mm;
   int32_t distance_mm;
   int16_t speed_mm_s;
+  int32_t roll_mdeg;
+  int32_t pitch_mdeg;
   int32_t yaw_mdeg;
-  int16_t yaw_rate_mdeg_s;
+  int32_t yaw_rate_mdeg_s;
   bool calibrated;
+  bool wheel_yaw_fused;
 } OdometrySample;
 
 typedef struct {

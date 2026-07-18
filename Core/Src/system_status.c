@@ -202,12 +202,7 @@ static void ReportOdometryToHost(void)
   OdometrySample odometry = Odometry_GetSample();
   OdometryDebug odometry_debug = Odometry_GetDebug();
 
-  RaspiLink_SendOdometry(odometry.time_ms,
-                         odometry.distance_mm,
-                         odometry.speed_mm_s,
-                         odometry.yaw_mdeg,
-                         odometry.yaw_rate_mdeg_s,
-                         odometry.calibrated);
+  RaspiLink_SendOdometry(&odometry);
   RaspiLink_SendOdometryDebug(odometry.time_ms,
                               odometry_debug.left_speed_mm_s,
                               odometry_debug.right_speed_mm_s,
@@ -216,13 +211,20 @@ static void ReportOdometryToHost(void)
                               odometry_debug.right_delta_mm);
 
   DebugUart_PrintfIf(DEBUG_LOG_ODOMETRY,
-                     "[ODOM] t=%lu dist=%ld speed=%d yaw=%ld rate=%d cal=%d\r\n",
+                     "[ODOM] t=%lu x=%ld y=%ld z=%ld dist=%ld speed=%d "
+                     "rpy=%ld/%ld/%ld rate=%ld cal=%d fused=%d\r\n",
                      odometry.time_ms,
+                     odometry.x_mm,
+                     odometry.y_mm,
+                     odometry.z_mm,
                      odometry.distance_mm,
                      odometry.speed_mm_s,
+                     odometry.roll_mdeg,
+                     odometry.pitch_mdeg,
                      odometry.yaw_mdeg,
                      odometry.yaw_rate_mdeg_s,
-                     odometry.calibrated ? 1 : 0);
+                     odometry.calibrated ? 1 : 0,
+                     odometry.wheel_yaw_fused ? 1 : 0);
 
   DebugUart_PrintfIf(DEBUG_LOG_ODOMETRY,
                      "[ODOM_WHEEL] L=%d R=%d turn=%d dL=%d dR=%d\r\n",

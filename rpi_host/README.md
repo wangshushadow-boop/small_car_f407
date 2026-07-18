@@ -1,6 +1,7 @@
 # 树莓派上位机 C++ 模块
 
-本目录是运行在树莓派上的上位机代码，用于和 STM32F407 主控板通信，并提供相机、音频等外设测试工具。
+本目录是运行在树莓派上的上位机代码。正式运行链路采用 ROS2 Kilted，
+`small_car_bridge` 负责连接 STM32F407；原有命令行、相机和音频程序只保留为硬件诊断工具。
 
 ## 目录说明
 
@@ -10,11 +11,30 @@
 | `src/` | 上位机核心模块实现。 |
 | `tools/` | 独立测试工具，例如相机抓图、V4L2 抓图、音频录放。 |
 | `tests/` | 协议相关单元测试。 |
+| `ros2_ws/` | ROS2 工作区和 `small_car_bridge` 标准包。 |
+| `ros2/` | ROS2 Kilted ARM64 容器和运行说明。 |
 | `modules.md` | 各模块职责和使用方式说明。 |
 | `raspberry-pi-debug.md` | 树莓派常用调试命令，包括 WiFi、串口、相机、音频和 STM32 烧录。 |
 | `hermes-voice-recovery.md` | 树莓派丢失或重装后，完整恢复 Hermes 语音助手的步骤。 |
 
-## 构建
+## ROS2 运行
+
+完整接口见 `docs/ros2-interface.md`，树莓派启动命令见 `ros2/README.md`。
+Windows 修改代码后，在仓库根目录执行：
+
+```powershell
+.\scripts\sync_rpi_host.ps1
+```
+
+脚本会同步代码、运行协议测试、重建 ROS2 包并重启 bridge。正常运行时算法节点使用
+`/cmd_vel`、`/odom`、`/imu/data`、`/ultrasonic/front` 等 ROS2 接口，不直接打开串口。
+
+## 独立诊断工具
+
+以下 CMake 工具用于 ROS2 bridge 未运行时排查硬件。使用前进入 `rpi_host/ros2`
+执行 `sudo docker compose down`，避免多个进程同时占用 `/dev/ttyACM0`。
+
+### 构建
 
 ```bash
 cd ~/small_car_f407/rpi_host
@@ -22,14 +42,14 @@ cmake -S . -B build
 cmake --build build
 ```
 
-## 协议测试
+### 协议测试
 
 ```bash
 cd ~/small_car_f407/rpi_host
 ctest --test-dir build --output-on-failure
 ```
 
-## 串口通信测试
+### 串口通信测试
 
 监听 MCU 上行数据：
 
@@ -73,7 +93,7 @@ ctest --test-dir build --output-on-failure
 ./build/sensor_monitor --port /dev/ttyACM0 --enc --odom
 ```
 
-## 可选工具
+### 可选工具
 
 启用 OpenCV 相机工具：
 
@@ -201,13 +221,19 @@ systemctl --user enable --now hermes-car-voice.service
 
 | ID | 含义 |
 | ---: | --- |
-| 1 | 里程计比例分子，分母固定为1000 |
+| 1 | 里程计比例分子，分母固定为15600 |
 | 2 | 手柄前进起步输出 |
 | 3 | 手柄后退起步输出 |
 | 4 | 手柄前后最大输出 |
 | 5 | 手柄转向起步输出 |
 | 6 | 手柄转向最大输出 |
 | 7 | 超声避障距离阈值，单位mm |
+| 8 | 陀螺仪灵敏度乘以10 |
+| 9 | 有效轮距，单位mm；0表示关闭轮速航向融合 |
+| 10 | 航向融合的陀螺仪权重，0-1000 |
+| 11 | roll/pitch互补滤波的陀螺仪权重，0-1000 |
+| 12 | IMU安装横滚偏置，单位mdeg |
+| 13 | IMU安装俯仰偏置，单位mdeg |
 
 # 同步并编译
 
@@ -217,7 +243,7 @@ systemctl --user enable --now hermes-car-voice.service
 .\scripts\sync_rpi_host.ps1
 ```
 
-脚本会依次同步 `rpi_host` 源码，并在树莓派上执行 CMake 编译。默认目标为
+脚本会同步 `rpi_host` 源码，在树莓派上执行 CMake/CTest，并重建、重启 ROS2 bridge。默认目标为
 `ubuntu@192.168.3.85:/home/ubuntu/small_car_f407/rpi_host`。
 远端 `build` 是生成目录，每次同步后都会清理并重新构建，避免混用 Windows
 和树莓派的 CMake 缓存。

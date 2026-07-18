@@ -62,11 +62,17 @@ struct DeviceStatus {
 
 struct Odometry {
   std::uint32_t mcu_time_ms = 0;
+  std::int32_t x_mm = 0;
+  std::int32_t y_mm = 0;
+  std::int32_t z_mm = 0;
   std::int32_t distance_mm = 0;
   std::int16_t speed_mm_s = 0;
+  std::int32_t roll_mdeg = 0;
+  std::int32_t pitch_mdeg = 0;
   std::int32_t yaw_mdeg = 0;
-  std::int16_t yaw_rate_mdeg_s = 0;
+  std::int32_t yaw_rate_mdeg_s = 0;
   bool calibrated = false;
+  bool wheel_yaw_fused = false;
 };
 
 struct OdometryDebug {

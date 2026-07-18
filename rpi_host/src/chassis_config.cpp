@@ -21,7 +21,7 @@ struct ParameterDefinition {
   std::int32_t max_value;
 };
 
-constexpr std::array<ParameterDefinition, 7> kParameterDefinitions = {{
+constexpr std::array<ParameterDefinition, 13> kParameterDefinitions = {{
     {1, "odom_mm_per_tick_num", 1000, 5000},
     {2, "gamepad_forward_start", 0, 1000},
     {3, "gamepad_reverse_start", 0, 1000},
@@ -29,6 +29,12 @@ constexpr std::array<ParameterDefinition, 7> kParameterDefinitions = {{
     {5, "gamepad_turn_start", 0, 1000},
     {6, "gamepad_turn_max", 0, 1000},
     {7, "ultra_near_distance_mm", 0, 5000},
+    {8, "gyro_lsb_per_dps_x10", 100, 300},
+    {9, "wheel_track_mm", 0, 1000},
+    {10, "yaw_gyro_weight_permille", 0, 1000},
+    {11, "attitude_gyro_weight_permille", 0, 1000},
+    {12, "imu_roll_offset_mdeg", -30000, 30000},
+    {13, "imu_pitch_offset_mdeg", -30000, 30000},
 }};
 
 std::runtime_error ConfigError(const std::string& detail) {

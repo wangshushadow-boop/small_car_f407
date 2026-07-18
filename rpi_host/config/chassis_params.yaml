@@ -3,7 +3,7 @@
 # 上位机每次启动时都会加载全部参数、下发到 MCU 并回读校验。
 small_car:
   ros__parameters:
-    # 参数 ID 1：里程计每个编码器计数对应毫米数的分子，分母固定为 1000。
+    # 参数 ID 1：里程计每个编码器计数对应毫米数的分子，分母固定为 15600。
     odom_mm_per_tick_num: 2513
 
     # 参数 ID 2：手柄前进方向开始驱动时的电机输出，范围 0-1000。
@@ -23,3 +23,21 @@ small_car:
 
     # 参数 ID 7：超声避障距离阈值，单位为毫米。
     ultra_near_distance_mm: 200
+
+    # 参数 ID 8：ICM20948 陀螺仪灵敏度乘以 10，当前 +/-2000 dps 对应 164。
+    gyro_lsb_per_dps_x10: 164
+
+    # 参数 ID 9：左右轮中心的有效轮距，单位毫米；0 表示未标定并关闭轮速航向融合。
+    wheel_track_mm: 115
+
+    # 参数 ID 10：航向增量中陀螺仪的权重，范围 0-1000。
+    yaw_gyro_weight_permille: 900
+
+    # 参数 ID 11：roll/pitch 互补滤波中陀螺仪的权重，范围 0-1000。
+    attitude_gyro_weight_permille: 980
+
+    # 参数 ID 12：IMU 安装横滚偏置，单位 mdeg；平地静止标定后填写。
+    imu_roll_offset_mdeg: -2050
+
+    # 参数 ID 13：IMU 安装俯仰偏置，单位 mdeg；平地静止标定后填写。
+    imu_pitch_offset_mdeg: 990

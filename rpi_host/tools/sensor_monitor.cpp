@@ -151,11 +151,16 @@ void PrintDevice(const small_car::DeviceStatus& device) {
 
 void PrintOdometry(const small_car::Odometry& odometry) {
   std::cout << "[ODOM] t=" << odometry.mcu_time_ms
+            << " xyz=" << odometry.x_mm << "/" << odometry.y_mm << "/"
+            << odometry.z_mm << " mm"
             << " dist=" << odometry.distance_mm << " mm"
             << " speed=" << odometry.speed_mm_s << " mm/s"
-            << " yaw=" << (odometry.yaw_mdeg / 1000.0) << " deg"
+            << " rpy=" << (odometry.roll_mdeg / 1000.0) << "/"
+            << (odometry.pitch_mdeg / 1000.0) << "/"
+            << (odometry.yaw_mdeg / 1000.0) << " deg"
             << " yaw_rate=" << (odometry.yaw_rate_mdeg_s / 1000.0) << " deg/s"
-            << " calibrated=" << odometry.calibrated << "\n";
+            << " calibrated=" << odometry.calibrated
+            << " wheel_fused=" << odometry.wheel_yaw_fused << "\n";
 }
 
 void PrintOdometryDebug(const small_car::OdometryDebug& odometry_debug) {

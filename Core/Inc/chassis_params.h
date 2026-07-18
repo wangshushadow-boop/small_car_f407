@@ -12,6 +12,12 @@ typedef enum {
   CHASSIS_PARAM_GAMEPAD_TURN_START = 5,
   CHASSIS_PARAM_GAMEPAD_TURN_MAX = 6,
   CHASSIS_PARAM_ULTRA_NEAR_DISTANCE = 7,
+  CHASSIS_PARAM_GYRO_LSB_PER_DPS_X10 = 8,
+  CHASSIS_PARAM_WHEEL_TRACK_MM = 9,
+  CHASSIS_PARAM_YAW_GYRO_WEIGHT_PERMILLE = 10,
+  CHASSIS_PARAM_ATTITUDE_GYRO_WEIGHT_PERMILLE = 11,
+  CHASSIS_PARAM_IMU_ROLL_OFFSET_MDEG = 12,
+  CHASSIS_PARAM_IMU_PITCH_OFFSET_MDEG = 13,
 } ChassisParamId;
 
 typedef struct {
@@ -22,6 +28,12 @@ typedef struct {
   int16_t gamepad_turn_start;
   int16_t gamepad_turn_max;
   int16_t ultra_near_distance_mm;
+  int16_t gyro_lsb_per_dps_x10;
+  int16_t wheel_track_mm;
+  int16_t yaw_gyro_weight_permille;
+  int16_t attitude_gyro_weight_permille;
+  int16_t imu_roll_offset_mdeg;
+  int16_t imu_pitch_offset_mdeg;
 } ChassisParams;
 
 void ChassisParams_Init(void);

@@ -1,0 +1,19 @@
+services:
+  small_car_ros2:
+    build:
+      context: ..
+      dockerfile: ros2/Dockerfile
+    image: small-car-ros2:kilted
+    network_mode: host
+    ipc: host
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+    volumes:
+      - ..:/workspace/rpi_host
+    working_dir: /workspace/rpi_host/ros2_ws
+    command: >-
+      bash -lc "source /opt/ros/kilted/setup.bash &&
+      colcon build --symlink-install &&
+      source install/setup.bash &&
+      ros2 launch small_car_bridge bridge.launch.py"
+    restart: unless-stopped

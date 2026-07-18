@@ -50,7 +50,7 @@
 [CMD] imu=on pad=off servo=off motor=off enc=on ultra=off
 [IMU] ax=151 ay=-334 az=1931 gx=27 gy=-24 gz=-32 temp=5200
 [ENC] A=0/0 B=0/0 C=0/0 D=0/0
-[ODOM] t=123456 dist=120 speed=80 yaw=1500 rate=20 cal=1
+[ODOM] t=123456 x=120 y=0 z=5 dist=120 speed=80 rpy=0/2500/1500 rate=20 cal=1 fused=0
 [ODOM_WHEEL] L=78 R=82 turn=4 dL=2 dR=2
 ```
 
@@ -174,12 +174,17 @@ AA 55 | VER | MSG | SEQ | LEN | PAYLOAD... | CRC16
 | `0x85` | ACK/错误 | `ack_seq` | 1 | `u8` | SEQ | 被回复的消息序号 |
 | `0x85` | ACK/错误 | `result` | 2 | `u8` | 见结果码表 | 处理结果 |
 | `0x86` | 里程计融合 | `mcu_time_ms` | 0 | `u32` | ms | 里程计更新时间 |
-| `0x86` | 里程计融合 | `distance` | 4 | `i32` | mm | 编码器估算的累计移动距离 |
-| `0x86` | 里程计融合 | `speed` | 8 | `i16` | mm/s | 编码器估算的当前线速度 |
-| `0x86` | 里程计融合 | `yaw` | 10 | `i32` | mdeg | IMU陀螺仪Z轴积分航向角，`1000=1deg` |
-| `0x86` | 里程计融合 | `yaw_rate` | 14 | `i16` | mdeg/s | 当前角速度，`1000=1deg/s` |
-| `0x86` | 里程计融合 | `calibrated` | 16 | `u8` | `0/1` | 陀螺仪零偏是否校准完成 |
-| `0x86` | 里程计融合 | `reserved` | 17 | `u8` | 0 | 预留 |
+| `0x86` | 2.5D里程计融合 | `x` | 4 | `i32` | mm | ROS坐标系X位置，车头前方为正 |
+| `0x86` | 2.5D里程计融合 | `y` | 8 | `i32` | mm | ROS坐标系Y位置，车体左侧为正 |
+| `0x86` | 2.5D里程计融合 | `z` | 12 | `i32` | mm | 高度变化，向上为正 |
+| `0x86` | 2.5D里程计融合 | `distance` | 16 | `i32` | mm | 编码器估算的坡面累计有向距离 |
+| `0x86` | 2.5D里程计融合 | `speed` | 20 | `i16` | mm/s | 编码器估算的当前坡面线速度 |
+| `0x86` | 2.5D里程计融合 | `roll` | 22 | `i32` | mdeg | 横滚角，`1000=1deg` |
+| `0x86` | 2.5D里程计融合 | `pitch` | 26 | `i32` | mdeg | 俯仰角，上坡为正 |
+| `0x86` | 2.5D里程计融合 | `yaw` | 30 | `i32` | mdeg | 航向角，左转为正 |
+| `0x86` | 2.5D里程计融合 | `yaw_rate` | 34 | `i32` | mdeg/s | 当前融合角速度 |
+| `0x86` | 2.5D里程计融合 | `calibrated` | 38 | `u8` | `0/1` | 三轴陀螺仪零偏是否校准完成 |
+| `0x86` | 2.5D里程计融合 | `wheel_yaw_fused` | 39 | `u8` | `0/1` | 是否已启用编码器差速航向融合 |
 | `0x87` | 里程计调试 | `mcu_time_ms` | 0 | `u32` | ms | 里程计更新时间 |
 | `0x87` | 里程计调试 | `left_speed` | 4 | `i16` | mm/s | 左侧两轮平均线速度 |
 | `0x87` | 里程计调试 | `right_speed` | 6 | `i16` | mm/s | 右侧两轮平均线速度 |
@@ -203,13 +208,19 @@ AA 55 | VER | MSG | SEQ | LEN | PAYLOAD... | CRC16
 | 参数操作 `op` | `1` | `SET` | 设置运行时参数；旧工具中也兼容为里程计清零 |
 | 参数操作 `op` | `2` | `GET` | 读取运行时参数 |
 | 参数操作 `op` | `3` | `ODOM_RESET` | 清零里程计并重新校准陀螺仪零偏 |
-| 参数ID `param_id` | `1` | `ODOM_MM_PER_TICK_NUM` | 里程计每tick毫米比例的分子，分母固定为1000 |
+| 参数ID `param_id` | `1` | `ODOM_MM_PER_TICK_NUM` | 里程计每tick毫米比例的分子，分母固定为15600 |
 | 参数ID `param_id` | `2` | `GAMEPAD_FORWARD_START` | 手柄前进起步输出 |
 | 参数ID `param_id` | `3` | `GAMEPAD_REVERSE_START` | 手柄后退起步输出 |
 | 参数ID `param_id` | `4` | `GAMEPAD_DRIVE_MAX` | 手柄前后最大输出 |
 | 参数ID `param_id` | `5` | `GAMEPAD_TURN_START` | 手柄转向起步输出 |
 | 参数ID `param_id` | `6` | `GAMEPAD_TURN_MAX` | 手柄转向最大输出 |
 | 参数ID `param_id` | `7` | `ULTRA_NEAR_DISTANCE_MM` | 前方超声避障距离阈值 |
+| 参数ID `param_id` | `8` | `GYRO_LSB_PER_DPS_X10` | 陀螺仪灵敏度乘以10 |
+| 参数ID `param_id` | `9` | `WHEEL_TRACK_MM` | 有效轮距；0表示关闭轮速航向融合 |
+| 参数ID `param_id` | `10` | `YAW_GYRO_WEIGHT_PERMILLE` | 航向融合的陀螺仪权重，0-1000 |
+| 参数ID `param_id` | `11` | `ATTITUDE_GYRO_WEIGHT_PERMILLE` | roll/pitch互补滤波的陀螺仪权重，0-1000 |
+| 参数ID `param_id` | `12` | `IMU_ROLL_OFFSET_MDEG` | IMU安装横滚偏置，单位mdeg |
+| 参数ID `param_id` | `13` | `IMU_PITCH_OFFSET_MDEG` | IMU安装俯仰偏置，单位mdeg |
 | ACK结果 `result` | `0` | `OK` | 命令处理成功 |
 | ACK结果 `result` | `1` | `CRC_ERROR` | CRC错误 |
 | ACK结果 `result` | `2` | `LEN_ERROR` | 长度错误 |
@@ -233,9 +244,9 @@ AA 55 | VER | MSG | SEQ | LEN | PAYLOAD... | CRC16
 | `0x81` 底盘状态 | 20Hz | 20字节 | 约 400B/s |
 | `0x82` 编码器增量 | 50Hz | 20字节 | 约 1000B/s |
 | `0x83` IMU原始数据 | 50Hz | 24字节 | 约 1200B/s |
-| `0x86` 里程计融合 | 50Hz | 26字节 | 约 1300B/s |
+| `0x86` 2.5D里程计融合 | 50Hz | 48字节 | 约 2400B/s |
 | `0x84` 设备状态 | 1Hz | 16字节 | 可忽略 |
-| 合计 | - | - | 约 4.3KB/s |
+| 合计 | - | - | 约 5.4KB/s |
 
 115200 8N1 的实际可用吞吐约 10KB/s 左右，上述配置有余量。
 
@@ -271,6 +282,6 @@ OLED不作为完整通信协议，只显示低频摘要。当前每 1000ms 刷�
 - 真实车速
 - 舵机角度的物理单位
 - 更高精度的时间同步算法
-- 轮距参数：当前里程计已使用官方霍尔编码器参数估算直线距离，但编码器差速角速度还需要实测轮距后再换算
+- 有效轮距尚未实测，`wheel_track_mm=0` 时系统只使用 IMU 航向；测量并标定后才启用编码器差速航向融合
 
 

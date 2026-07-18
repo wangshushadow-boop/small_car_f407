@@ -32,6 +32,12 @@ void ChassisParams_Init(void)
   g_params.gamepad_turn_start = 260;
   g_params.gamepad_turn_max = 550;
   g_params.ultra_near_distance_mm = 200;
+  g_params.gyro_lsb_per_dps_x10 = 164;
+  g_params.wheel_track_mm = 0;
+  g_params.yaw_gyro_weight_permille = 900;
+  g_params.attitude_gyro_weight_permille = 980;
+  g_params.imu_roll_offset_mdeg = 0;
+  g_params.imu_pitch_offset_mdeg = 0;
 }
 
 bool ChassisParams_Set(ChassisParamId id, int32_t value)
@@ -68,6 +74,30 @@ bool ChassisParams_Set(ChassisParamId id, int32_t value)
 
     case CHASSIS_PARAM_ULTRA_NEAR_DISTANCE:
       g_params.ultra_near_distance_mm = ClampI16Param(value, 0, 5000);
+      return true;
+
+    case CHASSIS_PARAM_GYRO_LSB_PER_DPS_X10:
+      g_params.gyro_lsb_per_dps_x10 = ClampI16Param(value, 100, 300);
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_TRACK_MM:
+      g_params.wheel_track_mm = ClampI16Param(value, 0, 1000);
+      return true;
+
+    case CHASSIS_PARAM_YAW_GYRO_WEIGHT_PERMILLE:
+      g_params.yaw_gyro_weight_permille = ClampI16Param(value, 0, 1000);
+      return true;
+
+    case CHASSIS_PARAM_ATTITUDE_GYRO_WEIGHT_PERMILLE:
+      g_params.attitude_gyro_weight_permille = ClampI16Param(value, 0, 1000);
+      return true;
+
+    case CHASSIS_PARAM_IMU_ROLL_OFFSET_MDEG:
+      g_params.imu_roll_offset_mdeg = ClampI16Param(value, -30000, 30000);
+      return true;
+
+    case CHASSIS_PARAM_IMU_PITCH_OFFSET_MDEG:
+      g_params.imu_pitch_offset_mdeg = ClampI16Param(value, -30000, 30000);
       return true;
 
     default:
@@ -110,6 +140,30 @@ bool ChassisParams_GetValue(ChassisParamId id, int32_t *value)
 
     case CHASSIS_PARAM_ULTRA_NEAR_DISTANCE:
       *value = g_params.ultra_near_distance_mm;
+      return true;
+
+    case CHASSIS_PARAM_GYRO_LSB_PER_DPS_X10:
+      *value = g_params.gyro_lsb_per_dps_x10;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_TRACK_MM:
+      *value = g_params.wheel_track_mm;
+      return true;
+
+    case CHASSIS_PARAM_YAW_GYRO_WEIGHT_PERMILLE:
+      *value = g_params.yaw_gyro_weight_permille;
+      return true;
+
+    case CHASSIS_PARAM_ATTITUDE_GYRO_WEIGHT_PERMILLE:
+      *value = g_params.attitude_gyro_weight_permille;
+      return true;
+
+    case CHASSIS_PARAM_IMU_ROLL_OFFSET_MDEG:
+      *value = g_params.imu_roll_offset_mdeg;
+      return true;
+
+    case CHASSIS_PARAM_IMU_PITCH_OFFSET_MDEG:
+      *value = g_params.imu_pitch_offset_mdeg;
       return true;
 
     default:

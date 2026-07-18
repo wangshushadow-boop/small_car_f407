@@ -2,6 +2,8 @@
 build/
 cmake-build-*/
 rpi_host/build*/
+rpi_host/ros2_ws/install/
+rpi_host/ros2_ws/log/
 out/
 bin/
 obj/

@@ -2,7 +2,6 @@ param(
   [string]$HostAddress = "192.168.3.85",
   [string]$UserName = "ubuntu",
   [string]$RemoteProject = "/home/ubuntu/small_car_f407/rpi_host",
-  [string]$SerialDevice = "/dev/ttyACM0",
   [int]$SshPort = 22
 )
 
@@ -29,12 +28,15 @@ function Invoke-CheckedCommand {
 }
 
 try {
-  Write-Host "[1/3] Packing rpi_host sources..."
+  Write-Host "[1/4] Packing rpi_host sources..."
   Push-Location $project_root
   try {
     Invoke-CheckedCommand tar -czf $archive_path `
       --exclude=rpi_host/build `
       --exclude=rpi_host/build-* `
+      --exclude=rpi_host/ros2_ws/build `
+      --exclude=rpi_host/ros2_ws/install `
+      --exclude=rpi_host/ros2_ws/log `
       --exclude=rpi_host/.cache `
       --exclude=rpi_host/*.jpg `
       --exclude=rpi_host/*.wav `
@@ -43,11 +45,11 @@ try {
     Pop-Location
   }
 
-  Write-Host "[2/3] Uploading to ${remote_target}..."
+  Write-Host "[2/4] Uploading to ${remote_target}..."
   Invoke-CheckedCommand scp -P $SshPort $archive_path `
     "${remote_target}:${remote_archive}"
 
-  Write-Host "[3/3] Building on Raspberry Pi..."
+  Write-Host "[3/4] Building host tools on Raspberry Pi..."
   $remote_command = @(
     "mkdir -p '$RemoteProject'",
     "tar -xzf '$remote_archive' -C '$RemoteProject' --strip-components=1",
@@ -55,11 +57,14 @@ try {
     "cmake -E remove_directory '$RemoteProject/build'",
     "cmake -S '$RemoteProject' -B '$RemoteProject/build'",
     "cmake --build '$RemoteProject/build' -j4",
-    "'$RemoteProject/build/small_car_host_cli' --port '$SerialDevice' --config '$RemoteProject/config/chassis_params.yaml'"
+    "ctest --test-dir '$RemoteProject/build' --output-on-failure",
+    "cd '$RemoteProject/ros2'",
+    "sudo docker compose build",
+    "sudo docker compose up -d --force-recreate"
   ) -join " && "
 
-  Invoke-CheckedCommand ssh -p $SshPort $remote_target $remote_command
-  Write-Host "Sync and build completed."
+  Invoke-CheckedCommand ssh -t -p $SshPort $remote_target $remote_command
+  Write-Host "[4/4] ROS2 bridge rebuilt and restarted."
 } finally {
   if (Test-Path -LiteralPath $archive_path) {
     Remove-Item -LiteralPath $archive_path -Force

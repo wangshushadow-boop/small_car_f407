@@ -27,7 +27,7 @@ odom reset
 `odom on` 会输出两类数据：
 
 ```text
-[ODOM] t=123456 dist=120 speed=80 yaw=1500 rate=20 cal=1
+[ODOM] t=123456 x=120 y=0 z=5 dist=120 speed=80 rpy=0/2500/1500 rate=20 cal=1 fused=0
 [ODOM_WHEEL] L=78 R=82 turn=4 dL=2 dR=2
 ```
 

@@ -95,12 +95,17 @@ void TestDecodeOdometry() {
       4,
       {
           0xE8, 0x03, 0x00, 0x00,  // t=1000
-          0x20, 0x03, 0x00, 0x00,  // distance=800
+          0x20, 0x03, 0x00, 0x00,  // x=800
+          0x9C, 0xFF, 0xFF, 0xFF,  // y=-100
+          0x19, 0x00, 0x00, 0x00,  // z=25
+          0x84, 0x03, 0x00, 0x00,  // distance=900
           0x64, 0x00,              // speed=100
+          0xE8, 0x03, 0x00, 0x00,  // roll=1000 mdeg
+          0x30, 0xF8, 0xFF, 0xFF,  // pitch=-2000 mdeg
           0x88, 0x13, 0x00, 0x00,  // yaw=5000 mdeg
-          0x0A, 0x00,              // yaw_rate=10 mdeg/s
+          0x40, 0x9C, 0x00, 0x00,  // yaw_rate=40000 mdeg/s
           0x01,                    // calibrated=true
-          0x00,                    // reserved
+          0x01,                    // wheel_yaw_fused=true
       });
   small_car::FrameParser parser;
   const auto frames = parser.Feed(raw);
@@ -108,11 +113,17 @@ void TestDecodeOdometry() {
   const auto* odom = std::get_if<small_car::Odometry>(&decoded.value());
   Expect(odom != nullptr, "odometry type mismatch");
   Expect(odom->mcu_time_ms == 1000, "odometry time mismatch");
-  Expect(odom->distance_mm == 800, "odometry distance mismatch");
+  Expect(odom->x_mm == 800, "odometry x mismatch");
+  Expect(odom->y_mm == -100, "odometry y mismatch");
+  Expect(odom->z_mm == 25, "odometry z mismatch");
+  Expect(odom->distance_mm == 900, "odometry distance mismatch");
   Expect(odom->speed_mm_s == 100, "odometry speed mismatch");
+  Expect(odom->roll_mdeg == 1000, "odometry roll mismatch");
+  Expect(odom->pitch_mdeg == -2000, "odometry pitch mismatch");
   Expect(odom->yaw_mdeg == 5000, "odometry yaw mismatch");
-  Expect(odom->yaw_rate_mdeg_s == 10, "odometry yaw rate mismatch");
+  Expect(odom->yaw_rate_mdeg_s == 40000, "odometry yaw rate mismatch");
   Expect(odom->calibrated, "odometry calibrated mismatch");
+  Expect(odom->wheel_yaw_fused, "odometry fusion flag mismatch");
 }
 
 void TestDecodeOdometryDebug() {

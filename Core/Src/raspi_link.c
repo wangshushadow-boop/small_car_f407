@@ -199,21 +199,26 @@ void RaspiLink_SendDeviceStatus(bool pad_ok, bool imu_ok, bool ultra_ok, uint8_t
   SendFrame(RASPI_MSG_DEVICE_STATUS, payload, sizeof(payload));
 }
 
-void RaspiLink_SendOdometry(uint32_t odom_time_ms,
-                            int32_t distance_mm,
-                            int16_t speed_mm_s,
-                            int32_t yaw_mdeg,
-                            int16_t yaw_rate_mdeg_s,
-                            bool calibrated)
+void RaspiLink_SendOdometry(const OdometrySample *odometry)
 {
-  uint8_t payload[18] = {0};
-  WriteU32Le(&payload[0], odom_time_ms);
-  WriteI32Le(&payload[4], distance_mm);
-  WriteI16Le(&payload[8], speed_mm_s);
-  WriteI32Le(&payload[10], yaw_mdeg);
-  WriteI16Le(&payload[14], yaw_rate_mdeg_s);
-  payload[16] = calibrated ? 1U : 0U;
-  payload[17] = 0U;
+  if (odometry == NULL)
+  {
+    return;
+  }
+
+  uint8_t payload[40] = {0};
+  WriteU32Le(&payload[0], odometry->time_ms);
+  WriteI32Le(&payload[4], odometry->x_mm);
+  WriteI32Le(&payload[8], odometry->y_mm);
+  WriteI32Le(&payload[12], odometry->z_mm);
+  WriteI32Le(&payload[16], odometry->distance_mm);
+  WriteI16Le(&payload[20], odometry->speed_mm_s);
+  WriteI32Le(&payload[22], odometry->roll_mdeg);
+  WriteI32Le(&payload[26], odometry->pitch_mdeg);
+  WriteI32Le(&payload[30], odometry->yaw_mdeg);
+  WriteI32Le(&payload[34], odometry->yaw_rate_mdeg_s);
+  payload[38] = odometry->calibrated ? 1U : 0U;
+  payload[39] = odometry->wheel_yaw_fused ? 1U : 0U;
   SendFrame(RASPI_MSG_ODOMETRY, payload, sizeof(payload));
 }
 
