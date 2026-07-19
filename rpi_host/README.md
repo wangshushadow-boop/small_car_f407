@@ -32,7 +32,7 @@ Windows 修改代码后，在仓库根目录执行：
 ## 独立诊断工具
 
 以下 CMake 工具用于 ROS2 bridge 未运行时排查硬件。使用前进入 `rpi_host/ros2`
-执行 `sudo docker compose down`，避免多个进程同时占用 `/dev/ttyACM0`。
+执行 `docker compose down`，避免多个进程同时占用 `/dev/ttyACM0`。
 
 ### 构建
 

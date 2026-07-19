@@ -6,20 +6,20 @@
 
 ```bash
 cd ~/small_car_f407/rpi_host/ros2
-sudo docker compose up --build
+docker compose up --build
 ```
 
 后台运行：
 
 ```bash
-sudo docker compose up --build -d
-sudo docker compose logs -f
+docker compose up --build -d
+docker compose logs -f
 ```
 
 停止：
 
 ```bash
-sudo docker compose down
+docker compose down
 ```
 
 ## 调试
@@ -27,7 +27,7 @@ sudo docker compose down
 进入已启动的容器：
 
 ```bash
-sudo docker compose exec small_car_ros2 bash
+docker compose exec small_car_ros2 bash
 source /opt/ros/kilted/setup.bash
 source /workspace/rpi_host/ros2_ws/install/setup.bash
 ```

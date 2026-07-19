@@ -59,8 +59,8 @@ try {
     "cmake --build '$RemoteProject/build' -j4",
     "ctest --test-dir '$RemoteProject/build' --output-on-failure",
     "cd '$RemoteProject/ros2'",
-    "sudo docker compose build",
-    "sudo docker compose up -d --force-recreate"
+    "docker compose build",
+    "docker compose up -d --force-recreate"
   ) -join " && "
 
   Invoke-CheckedCommand ssh -t -p $SshPort $remote_target $remote_command

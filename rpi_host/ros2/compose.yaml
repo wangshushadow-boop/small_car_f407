@@ -16,4 +16,9 @@ services:
       colcon build --symlink-install &&
       source install/setup.bash &&
       ros2 launch small_car_bridge bridge.launch.py"
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
