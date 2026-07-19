@@ -124,8 +124,18 @@ chmod +x ~/small_car_f407/rpi_host/tools/jabra_record_playback.sh
 当前语音硬件为 `Jabra SPEAK 410 USB`：PortAudio 输入设备 `0`，录音采样率 `16000 Hz`；ALSA 播放设备 `plughw:CARD=USB,DEV=0`，播放采样率 `48000 Hz`、双声道。录音与播放采样率必须分开设置，否则回复语音会变速。麦克风增益设置为 `7/7`，扬声器设置为 `8/11`。
 
 ```text
-USB 麦克风 → 本地 VAD → faster-whisper-base → 本地唤醒词匹配
+USB 麦克风 → 本地 VAD → SenseVoice-Small INT8 → 本地唤醒词匹配
 → Hermes / MiniMax M3 → MiniMax TTS → USB 扬声器
+```
+
+当前 STT 在树莓派本地运行，使用 `sherpa-onnx 1.13.4` 加载 SenseVoice-Small INT8 模型。模型和独立 Python 环境位于 `~/.hermes/`，音频不会上传到云端；Whisper tiny/base 仅保留用于手动回退。
+
+手动测试一段 16 kHz、单声道、16 位 PCM WAV：
+
+```bash
+~/.hermes/sensevoice-venv/bin/python \
+  ~/.hermes/car_voice/sensevoice_transcribe.py \
+  ~/jabra-mic-test.wav
 ```
 
 当前唤醒口令：
@@ -188,6 +198,7 @@ systemctl --user start hermes-car-voice.service
 | 内容 | 树莓派路径 |
 | --- | --- |
 | 语音守护进程 | `~/.hermes/car_voice/hermes_voice_daemon.py` |
+| SenseVoice 转写工具 | `~/.hermes/car_voice/sensevoice_transcribe.py` |
 | systemd 服务 | `~/.config/systemd/user/hermes-car-voice.service` |
 | Hermes 配置 | `~/.hermes/config.yaml` |
 | API 密钥环境文件 | `~/.hermes/.env` |

@@ -1,6 +1,6 @@
 # Hermes 语音助手完整恢复手册
 
-本文用于树莓派系统、SD 卡或整机丢失后，从本项目重新部署 Hermes 常驻语音助手。仓库中不保存真实 API Key、Hermes 运行数据、Python 虚拟环境或 Whisper 模型；这些内容按照本文重新生成或下载。
+本文用于树莓派系统、SD 卡或整机丢失后，从本项目重新部署 Hermes 常驻语音助手。仓库中不保存真实 API Key、Hermes 运行数据、Python 虚拟环境或 STT 模型；这些内容按照本文重新生成或下载。
 
 ## 1. 恢复目标
 
@@ -9,9 +9,9 @@
 ```text
 USB 麦克风
   → 本地音量检测和语音分段
-  → Whisper tiny 待机识别
+  → SenseVoice-Small INT8 本地识别
   → 宽松唤醒（调试阶段检测到有效语音即可唤醒）
-  → Whisper base 对话识别
+  → SenseVoice-Small INT8 本地对话识别
   → Hermes Agent / MiniMax M3
   → MiniMax TTS
   → USB 扬声器
@@ -22,6 +22,7 @@ USB 麦克风
 | 文件 | 用途 |
 | --- | --- |
 | `rpi_host/tools/hermes_voice_daemon.py` | 常驻语音守护进程。 |
+| `rpi_host/tools/sensevoice_transcribe.py` | SenseVoice 本地转写工具。 |
 | `rpi_host/systemd/hermes-car-voice.service` | systemd 用户服务。 |
 | `rpi_host/README.md` | 日常启动、停止和日志命令。 |
 | `rpi_host/hermes-voice-recovery.md` | 本恢复手册。 |
@@ -39,8 +40,9 @@ USB 麦克风
 | TTS 地址 | `https://api.minimaxi.com/v1/t2a_v2` |
 | TTS 模型 | `speech-2.8-hd` |
 | TTS 音色 | `male-qn-qingse` |
-| 待机 STT | `faster-whisper-tiny` |
-| 对话 STT | `faster-whisper-base` |
+| 当前待机 STT | `SenseVoice-Small INT8`，本地 sherpa-onnx。 |
+| 当前对话 STT | `SenseVoice-Small INT8`，本地 sherpa-onnx。 |
+| 回退 STT | `faster-whisper-tiny` / `faster-whisper-base`。 |
 | USB 声卡 | Jabra SPEAK 410 USB，ALSA card `0`，PortAudio device `0`。 |
 | 录音设备 | `hw:0,0`，16 kHz、单声道、16 位 PCM。 |
 | 播放设备 | `plughw:CARD=USB,DEV=0`，48 kHz、双声道、16 位 PCM。 |
@@ -179,9 +181,42 @@ $HERMES -z '只回复 RESTORE_OK'
 RESTORE_OK
 ```
 
-## 6. 下载 Whisper 模型
+## 6. 安装 SenseVoice-Small
 
-Hugging Face 在部分网络环境下访问较慢，当前使用镜像直接下载完整模型目录。
+为 SenseVoice 创建独立 Python 3.11 环境，不修改 Hermes 环境中的依赖：
+
+```bash
+~/.hermes/venv/bin/python -m venv ~/.hermes/sensevoice-venv
+~/.hermes/sensevoice-venv/bin/python -m pip install \
+  --no-cache-dir \
+  --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+  'sherpa-onnx==1.13.4' \
+  'numpy==2.3.1'
+```
+
+下载官方 SenseVoice-Small INT8 模型的 ONNX 文件和词表：
+
+```bash
+SENSEVOICE_DIR="$HOME/.hermes/models/\
+sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"
+mkdir -p "$SENSEVOICE_DIR"
+
+curl -fL --retry 8 --retry-delay 2 --connect-timeout 20 \
+  -o "$SENSEVOICE_DIR/tokens.txt" \
+  'https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt'
+
+curl -fL --retry 8 --retry-delay 2 --connect-timeout 20 -C - \
+  -o "$SENSEVOICE_DIR/model.int8.onnx" \
+  'https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx'
+
+ls -lh "$SENSEVOICE_DIR/model.int8.onnx" "$SENSEVOICE_DIR/tokens.txt"
+```
+
+参考大小：模型约 `229 MB`，词表约 `309 KB`。
+
+### 可选：下载 Whisper 回退模型
+
+SenseVoice 是当前默认 STT。只有需要手动回退到原方案时，才需要下载 Whisper 模型：
 
 ```bash
 mkdir -p \
@@ -228,12 +263,19 @@ install -m 700 \
   ~/small_car_f407/rpi_host/tools/hermes_voice_daemon.py \
   ~/.hermes/car_voice/hermes_voice_daemon.py
 
+install -m 700 \
+  ~/small_car_f407/rpi_host/tools/sensevoice_transcribe.py \
+  ~/.hermes/car_voice/sensevoice_transcribe.py
+
 install -m 600 \
   ~/small_car_f407/rpi_host/systemd/hermes-car-voice.service \
   ~/.config/systemd/user/hermes-car-voice.service
 
 ~/.hermes/venv/bin/python -m py_compile \
   ~/.hermes/car_voice/hermes_voice_daemon.py
+
+~/.hermes/sensevoice-venv/bin/python -m py_compile \
+  ~/.hermes/car_voice/sensevoice_transcribe.py
 ```
 
 如果恢复时用户名不是 `ubuntu`，先修改 `hermes-car-voice.service` 和 `hermes_voice_daemon.py` 中的 `/home/ubuntu`。

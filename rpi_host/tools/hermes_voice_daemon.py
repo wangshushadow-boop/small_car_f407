@@ -41,6 +41,15 @@ MAX_UTTERANCE_SECONDS = float(os.getenv("CAR_VOICE_MAX_UTTERANCE_SECONDS", "20")
 PLAYBACK_DEVICE = os.getenv(
     "CAR_VOICE_PLAYBACK_DEVICE", "plughw:CARD=USB,DEV=0"
 )
+STT_PROVIDER = os.getenv("CAR_VOICE_STT_PROVIDER", "sensevoice")
+SENSEVOICE_PYTHON = os.getenv(
+    "CAR_VOICE_SENSEVOICE_PYTHON",
+    "/home/ubuntu/.hermes/sensevoice-venv/bin/python",
+)
+SENSEVOICE_SCRIPT = os.getenv(
+    "CAR_VOICE_SENSEVOICE_SCRIPT",
+    "/home/ubuntu/.hermes/car_voice/sensevoice_transcribe.py",
+)
 HERMES_BIN = os.getenv("HERMES_BIN", "/home/ubuntu/.hermes/venv/bin/hermes")
 RUN_DIR = Path(os.getenv("CAR_VOICE_RUN_DIR", "/home/ubuntu/.hermes/run/car-voice"))
 WAKE_STT_MODEL = os.getenv(
@@ -142,6 +151,35 @@ def record_utterance(wait_timeout: float) -> Path | None:
 
 
 def transcribe(path: Path, model: str | None = None) -> str:
+  if STT_PROVIDER == "sensevoice":
+    try:
+      completed = subprocess.run(
+          [SENSEVOICE_PYTHON, SENSEVOICE_SCRIPT, str(path)],
+          capture_output=True,
+          text=True,
+          timeout=60,
+          check=False,
+      )
+      result = json.loads(completed.stdout)
+      if completed.returncode != 0 or not result.get("success"):
+        LOG.error(
+            "SenseVoice failed: %s",
+            result.get("error", completed.stderr.strip() or "unknown error"),
+        )
+        return ""
+      text = str(result.get("text", "")).strip()
+      if not normalize_text(text):
+        text = ""
+      LOG.info(
+          "SenseVoice transcript (%.3fs): %s",
+          float(result.get("elapsed_seconds", 0)),
+          text or "<empty>",
+      )
+      return text
+    except (json.JSONDecodeError, OSError, subprocess.SubprocessError) as error:
+      LOG.error("SenseVoice failed: %s", error)
+      return ""
+
   result = transcribe_audio(str(path), model=model)
   if not result.get("success"):
     LOG.error("STT failed: %s", result.get("error", "unknown error"))
@@ -294,11 +332,12 @@ def main() -> int:
 
   LOG.info(
       "Voice daemon ready: input=%s at %s Hz, playback=%s at %s Hz, "
-      "threshold=%s, wake=%s, wake_on_any_speech=%s",
+      "stt=%s, threshold=%s, wake=%s, wake_on_any_speech=%s",
       INPUT_DEVICE,
       SAMPLE_RATE,
       PLAYBACK_DEVICE,
       PLAYBACK_SAMPLE_RATE,
+      STT_PROVIDER,
       RMS_THRESHOLD,
       ",".join(WAKE_PHRASES),
       WAKE_ON_ANY_SPEECH,
