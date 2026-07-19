@@ -134,6 +134,31 @@ USB 麦克风 → 本地 VAD → SenseVoice-Small INT8 → 本地唤醒词匹配
 
 视觉问答会把该次抓拍图片上传给 MiniMax；普通语音问题不会附带图片。
 
+语音文本会先经过结构化意图路由。相机、退出、音乐、音量和导航等明确表达优先由本地规则识别；包含动作线索但规则不确定的表达，会调用 MiniMax 返回受约束 JSON，普通聊天不会额外调用分类模型。当前允许执行 `camera.inspect` 和 `conversation.exit`；音乐、音量、导航只完成识别并给出尚未接入的语音提示，不会操作电机或系统命令。
+
+当前意图类型：
+
+```text
+camera.inspect
+conversation.chat
+conversation.exit
+music.play
+music.stop
+volume.adjust
+navigation.request
+unknown
+```
+
+手动测试一条文字的意图分类：
+
+```bash
+~/.hermes/venv/bin/python \
+  ~/.hermes/car_voice/hermes_voice_daemon.py \
+  --classify-intent '帮我确认眼前是不是一把椅子'
+```
+
+日志中的 `Intent` 行会记录意图、置信度、来源和提取参数；`source=local_rule` 表示本地规则，`source=minimax` 表示 MiniMax 语义分类。
+
 手动测试一段 16 kHz、单声道、16 位 PCM WAV：
 
 ```bash

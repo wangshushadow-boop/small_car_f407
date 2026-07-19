@@ -49,6 +49,7 @@ USB 麦克风
 | 播放设备 | `plughw:CARD=USB,DEV=0`，48 kHz、双声道、16 位 PCM。 |
 | USB 相机 | `/dev/video0`，触发时抓取 1280x720 MJPEG。 |
 | 最新抓图 | `~/.hermes/run/car-voice/camera-latest.jpg`，权限 `600`。 |
+| 意图路由 | 本地高置信规则优先，歧义动作请求使用 MiniMax JSON 分类。 |
 | 当前唤醒方式 | 调试阶段检测到有效语音即可唤醒，推荐说“小车”。 |
 
 ## 2. 系统准备
@@ -396,6 +397,20 @@ Calling Hermes with camera image
 ```
 
 视觉问答会把触发时抓拍的图片上传给 MiniMax；普通对话只发送文字。
+
+意图分类验收：
+
+```bash
+~/.hermes/venv/bin/python \
+  ~/.hermes/car_voice/hermes_voice_daemon.py \
+  --classify-intent '你看到了啥'
+
+~/.hermes/venv/bin/python \
+  ~/.hermes/car_voice/hermes_voice_daemon.py \
+  --classify-intent '帮我确认眼前是不是一把椅子'
+```
+
+第一条应返回 `camera.inspect` 和 `source=local_rule`；第二条应返回 `camera.inspect` 和 `source=minimax`。语音服务日志会输出 `Intent: name=...`。
 
 当前调试模式配置位于 `hermes-car-voice.service`：
 

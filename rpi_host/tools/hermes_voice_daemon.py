@@ -9,10 +9,12 @@ import os
 import re
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import wave
 from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -72,6 +74,9 @@ WAKE_STT_MODEL = os.getenv(
 WAKE_ON_ANY_SPEECH = os.getenv(
     "CAR_VOICE_WAKE_ON_ANY_SPEECH", "true"
 ).lower() in {"1", "true", "yes", "on"}
+INTENT_LLM_ENABLED = os.getenv(
+    "CAR_VOICE_INTENT_LLM_ENABLED", "true"
+).lower() in {"1", "true", "yes", "on"}
 
 WAKE_PHRASES = tuple(
     phrase.strip()
@@ -99,6 +104,25 @@ VISION_PHRASES = tuple(
     if phrase.strip()
 )
 
+SUPPORTED_INTENTS = {
+    "camera.inspect",
+    "conversation.chat",
+    "conversation.exit",
+    "music.play",
+    "music.stop",
+    "volume.adjust",
+    "navigation.request",
+    "unknown",
+}
+
+
+@dataclass(frozen=True)
+class IntentResult:
+  name: str
+  confidence: float
+  slots: dict[str, object]
+  source: str
+
 
 def request_stop(_signum: int, _frame: object) -> None:
   global STOP_REQUESTED
@@ -120,7 +144,7 @@ def is_vision_request(text: str) -> bool:
     return True
 
   normalized = normalize_text(text)
-  visual_actions = ("看", "看到", "看见", "瞧", "拍", "观察", "识别")
+  visual_actions = ("看", "看到", "看见", "瞧", "瞅", "拍", "观察", "识别")
   visual_targets = (
       "什么",
       "啥",
@@ -144,6 +168,76 @@ def is_vision_request(text: str) -> bool:
       term in normalized for term in ("这", "那", "前面", "眼前")
   )
   return (has_action and has_target) or distance_request
+
+
+def match_local_intent(text: str) -> IntentResult | None:
+  """Return a high-confidence local intent, or None for semantic routing."""
+  normalized = normalize_text(text)
+
+  if contains_phrase(text, EXIT_PHRASES):
+    return IntentResult("conversation.exit", 1.0, {}, "local_rule")
+  if is_vision_request(text):
+    return IntentResult(
+        "camera.inspect", 1.0, {"question": text}, "local_rule"
+    )
+
+  music_words = ("音乐", "歌曲", "歌", "萱草花", "播放")
+  if any(word in normalized for word in music_words):
+    if any(word in normalized for word in ("停止", "暂停", "关闭", "别放", "不放")):
+      return IntentResult("music.stop", 0.98, {}, "local_rule")
+    if any(word in normalized for word in ("播放", "放一首", "放首", "听", "来一首")):
+      return IntentResult(
+          "music.play", 0.98, {"request": text}, "local_rule"
+      )
+
+  if "音量" in normalized:
+    direction = "unknown"
+    if any(word in normalized for word in ("最大", "调大", "大一点", "提高")):
+      direction = "up"
+    elif any(word in normalized for word in ("最小", "调小", "小一点", "降低")):
+      direction = "down"
+    return IntentResult(
+        "volume.adjust", 0.98, {"direction": direction}, "local_rule"
+    )
+
+  navigation_verbs = ("导航", "前往", "移动到", "开到", "走到")
+  navigation_targets = ("桌子", "门口", "厨房", "客厅", "前面", "旁边", "那边")
+  if any(word in normalized for word in navigation_verbs) or (
+      any(word in normalized for word in ("去", "到"))
+      and any(word in normalized for word in navigation_targets)
+  ):
+    return IntentResult(
+        "navigation.request", 0.95, {"target_text": text}, "local_rule"
+    )
+
+  return None
+
+
+def looks_like_action_request(text: str) -> bool:
+  normalized = normalize_text(text)
+  hints = (
+      "看",
+      "瞧",
+      "瞅",
+      "相机",
+      "摄像头",
+      "照片",
+      "前面",
+      "周围",
+      "播放",
+      "音乐",
+      "歌曲",
+      "音量",
+      "停止",
+      "暂停",
+      "导航",
+      "前往",
+      "移动",
+      "帮我",
+      "给我",
+      "替我",
+  )
+  return any(hint in normalized for hint in hints)
 
 
 def capture_camera() -> Path | None:
@@ -302,6 +396,89 @@ def parse_hermes_output(stdout: str, stderr: str = "") -> tuple[str, str | None]
   return "\n".join(response_lines).strip(), session_id
 
 
+def extract_json_object(text: str) -> dict[str, object] | None:
+  decoder = json.JSONDecoder()
+  for index, char in enumerate(text):
+    if char != "{":
+      continue
+    try:
+      value, _ = decoder.raw_decode(text[index:])
+    except json.JSONDecodeError:
+      continue
+    if isinstance(value, dict):
+      return value
+  return None
+
+
+def classify_intent_with_llm(text: str) -> IntentResult | None:
+  prompt = (
+      "你是智能小车的意图分类器，只能输出单行 JSON，不要解释。"
+      "格式：{\"intent\":\"...\",\"confidence\":0.0,\"slots\":{}}。"
+      "intent 只能是 camera.inspect、conversation.chat、conversation.exit、"
+      "music.play、music.stop、volume.adjust、navigation.request、unknown。"
+      "camera.inspect 表示需要观察相机画面、拍照、判断眼前物体或距离；"
+      "navigation.request 表示要求小车移动到某处；其余按名称判断。"
+      "slots 中只提取用户明确说出的参数，不执行任何动作。\n"
+      f"用户原话：{text}"
+  )
+  command = [
+      HERMES_BIN,
+      "chat",
+      "-q",
+      prompt,
+      "-Q",
+      "--source",
+      "tool",
+      "--max-turns",
+      "1",
+      "--ignore-rules",
+  ]
+  try:
+    completed = subprocess.run(
+        command,
+        cwd="/home/ubuntu",
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+  except (OSError, subprocess.SubprocessError) as error:
+    LOG.error("Intent classifier failed: %s", error)
+    return None
+
+  if completed.returncode != 0:
+    LOG.error("Intent classifier failed: %s", completed.stderr.strip())
+    return None
+
+  payload = extract_json_object(completed.stdout)
+  if payload is None:
+    LOG.error("Intent classifier returned no JSON: %s", completed.stdout.strip())
+    return None
+
+  name = str(payload.get("intent", "unknown"))
+  if name not in SUPPORTED_INTENTS:
+    LOG.error("Intent classifier returned unsupported intent: %s", name)
+    return None
+  try:
+    confidence = min(1.0, max(0.0, float(payload.get("confidence", 0.0))))
+  except (TypeError, ValueError):
+    confidence = 0.0
+  slots_value = payload.get("slots", {})
+  slots = slots_value if isinstance(slots_value, dict) else {}
+  return IntentResult(name, confidence, slots, "minimax")
+
+
+def route_intent(text: str) -> IntentResult:
+  local = match_local_intent(text)
+  if local is not None:
+    return local
+  if INTENT_LLM_ENABLED and looks_like_action_request(text):
+    semantic = classify_intent_with_llm(text)
+    if semantic is not None and semantic.confidence >= 0.6:
+      return semantic
+  return IntentResult("conversation.chat", 1.0, {}, "default_chat")
+
+
 def ask_hermes(
     text: str, session_id: str | None, image_path: Path | None = None
 ) -> tuple[str, str | None]:
@@ -403,13 +580,61 @@ def speak(text: str) -> None:
     LOG.error("TTS/playback failed: %s", error)
 
 
+def process_user_turn(
+    text: str,
+    session_id: str | None,
+    intent: IntentResult | None = None,
+    prefetched_image: Path | None = None,
+) -> tuple[str | None, bool]:
+  intent = intent or route_intent(text)
+  LOG.info(
+      "Intent: name=%s, confidence=%.2f, source=%s, slots=%s",
+      intent.name,
+      intent.confidence,
+      intent.source,
+      json.dumps(intent.slots, ensure_ascii=False),
+  )
+
+  if intent.name == "conversation.exit":
+    speak("好的，再见。")
+    return session_id, True
+
+  if intent.name == "camera.inspect":
+    image_path = prefetched_image or capture_camera()
+    if image_path is None:
+      speak("相机抓图失败了，请检查相机连接。")
+      return session_id, False
+    response, session_id = ask_hermes(text, session_id, image_path)
+    speak(response)
+    return session_id, False
+
+  if intent.name in {"music.play", "music.stop"}:
+    speak("我识别到音乐控制请求了，但音乐控制还没有接入。")
+    return session_id, False
+  if intent.name == "volume.adjust":
+    speak("我识别到音量调节请求了，但语音音量控制还没有接入。")
+    return session_id, False
+  if intent.name == "navigation.request":
+    speak("我识别到小车移动请求了，但当前阶段还不能控制小车运动。")
+    return session_id, False
+
+  response, session_id = ask_hermes(text, session_id)
+  speak(response)
+  return session_id, False
+
+
 def conversation_loop(
-    initial_text: str | None = None, initial_image: Path | None = None
+    initial_text: str | None = None,
+    initial_image: Path | None = None,
+    initial_intent: IntentResult | None = None,
 ) -> None:
   session_id: str | None = None
   if initial_text:
-    response, session_id = ask_hermes(initial_text, session_id, initial_image)
-    speak(response)
+    session_id, should_exit = process_user_turn(
+        initial_text, session_id, initial_intent, initial_image
+    )
+    if should_exit:
+      return
   else:
     speak("我在，请说。")
   active_deadline = time.monotonic() + ACTIVE_TIMEOUT_SECONDS
@@ -425,19 +650,11 @@ def conversation_loop(
     path.unlink(missing_ok=True)
     if not text:
       continue
-    if contains_phrase(text, EXIT_PHRASES):
-      speak("好的，再见。")
-      return
 
     active_deadline = time.monotonic() + ACTIVE_TIMEOUT_SECONDS
-    image_path = None
-    if is_vision_request(text):
-      image_path = capture_camera()
-      if image_path is None:
-        speak("相机抓图失败了，请检查相机连接。")
-        continue
-    response, session_id = ask_hermes(text, session_id, image_path)
-    speak(response)
+    session_id, should_exit = process_user_turn(text, session_id)
+    if should_exit:
+      return
 
   if not STOP_REQUESTED:
     LOG.info("Conversation maximum active time reached")
@@ -480,8 +697,9 @@ def main() -> int:
             "phrase" if phrase_matched else "debug any-speech mode",
         )
         wake_image = capture_camera()
-        if is_vision_request(text) and wake_image is not None:
-          conversation_loop(text, wake_image)
+        initial_intent = route_intent(text)
+        if initial_intent.name != "conversation.chat":
+          conversation_loop(text, wake_image, initial_intent)
         else:
           conversation_loop()
       elif text:
@@ -495,4 +713,18 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+  if len(sys.argv) >= 3 and sys.argv[1] == "--classify-intent":
+    classified = route_intent(" ".join(sys.argv[2:]))
+    print(
+        json.dumps(
+            {
+                "intent": classified.name,
+                "confidence": classified.confidence,
+                "slots": classified.slots,
+                "source": classified.source,
+            },
+            ensure_ascii=False,
+        )
+    )
+    raise SystemExit(0)
   raise SystemExit(main())
