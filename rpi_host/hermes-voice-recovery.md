@@ -12,6 +12,7 @@ USB 麦克风
   → SenseVoice-Small INT8 本地识别
   → 宽松唤醒（调试阶段检测到有效语音即可唤醒）
   → SenseVoice-Small INT8 本地对话识别
+  → 视觉触发词命中时从 USB 相机重新抓图并附加到 Hermes 请求
   → Hermes Agent / MiniMax M3
   → MiniMax TTS
   → USB 扬声器
@@ -46,6 +47,8 @@ USB 麦克风
 | USB 声卡 | Jabra SPEAK 410 USB，ALSA card `0`，PortAudio device `0`。 |
 | 录音设备 | `hw:0,0`，16 kHz、单声道、16 位 PCM。 |
 | 播放设备 | `plughw:CARD=USB,DEV=0`，48 kHz、双声道、16 位 PCM。 |
+| USB 相机 | `/dev/video0`，触发时抓取 1280x720 MJPEG。 |
+| 最新抓图 | `~/.hermes/run/car-voice/camera-latest.jpg`，权限 `600`。 |
 | 当前唤醒方式 | 调试阶段检测到有效语音即可唤醒，推荐说“小车”。 |
 
 ## 2. 系统准备
@@ -278,6 +281,15 @@ install -m 600 \
   ~/.hermes/car_voice/sensevoice_transcribe.py
 ```
 
+构建语音服务调用的 V4L2 抓图工具：
+
+```bash
+cd ~/small_car_f407/rpi_host
+cmake -S . -B build-v4l2
+cmake --build build-v4l2 --target v4l2_capture
+test -x build-v4l2/v4l2_capture
+```
+
 如果恢复时用户名不是 `ubuntu`，先修改 `hermes-car-voice.service` 和 `hermes_voice_daemon.py` 中的 `/home/ubuntu`。
 
 ## 8. 配置 USB 麦克风和扬声器
@@ -374,6 +386,16 @@ journalctl --user -u hermes-car-voice.service -f
 6. Whisper base 转写问题。
 7. 日志出现 `Calling Hermes` 和 `Hermes response`。
 8. MiniMax TTS 生成语音并从 USB 扬声器播放。
+
+相机验收：可以一次说“小车，看看前面有什么”，或先唤醒再说“重新看一下”。日志应依次出现：
+
+```text
+Capturing camera image
+Camera image ready
+Calling Hermes with camera image
+```
+
+视觉问答会把触发时抓拍的图片上传给 MiniMax；普通对话只发送文字。
 
 当前调试模式配置位于 `hermes-car-voice.service`：
 

@@ -15,6 +15,12 @@ Environment=CAR_VOICE_PLAYBACK_DEVICE=plughw:CARD=USB,DEV=0
 Environment=CAR_VOICE_STT_PROVIDER=sensevoice
 Environment=CAR_VOICE_SENSEVOICE_PYTHON=/home/ubuntu/.hermes/sensevoice-venv/bin/python
 Environment=CAR_VOICE_SENSEVOICE_SCRIPT=/home/ubuntu/.hermes/car_voice/sensevoice_transcribe.py
+Environment=CAR_VOICE_CAMERA_CAPTURE_BIN=/home/ubuntu/small_car_f407/rpi_host/build-v4l2/v4l2_capture
+Environment=CAR_VOICE_CAMERA_DEVICE=/dev/video0
+Environment=CAR_VOICE_CAMERA_WIDTH=1280
+Environment=CAR_VOICE_CAMERA_HEIGHT=720
+Environment=CAR_VOICE_CAMERA_IMAGE=/home/ubuntu/.hermes/run/car-voice/camera-latest.jpg
+Environment=CAR_VOICE_VISION_PHRASES=看看前面,看一下前面,看下前面,前面有什么,你看到了什么,看看,看一下,看一看,拍张照片,拍照,重新看一下,重新看,打开相机,调用相机,摄像头,相机
 Environment=CAR_VOICE_RMS_THRESHOLD=250
 Environment=CAR_VOICE_WAKE_PHRASES=小车,晓车,校车,像车,想车,小撤
 Environment=CAR_VOICE_WAKE_ON_ANY_SPEECH=true

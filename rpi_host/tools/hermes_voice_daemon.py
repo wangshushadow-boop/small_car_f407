@@ -50,6 +50,19 @@ SENSEVOICE_SCRIPT = os.getenv(
     "CAR_VOICE_SENSEVOICE_SCRIPT",
     "/home/ubuntu/.hermes/car_voice/sensevoice_transcribe.py",
 )
+CAMERA_CAPTURE_BIN = os.getenv(
+    "CAR_VOICE_CAMERA_CAPTURE_BIN",
+    "/home/ubuntu/small_car_f407/rpi_host/build-v4l2/v4l2_capture",
+)
+CAMERA_DEVICE = os.getenv("CAR_VOICE_CAMERA_DEVICE", "/dev/video0")
+CAMERA_WIDTH = int(os.getenv("CAR_VOICE_CAMERA_WIDTH", "1280"))
+CAMERA_HEIGHT = int(os.getenv("CAR_VOICE_CAMERA_HEIGHT", "720"))
+CAMERA_IMAGE = Path(
+    os.getenv(
+        "CAR_VOICE_CAMERA_IMAGE",
+        "/home/ubuntu/.hermes/run/car-voice/camera-latest.jpg",
+    )
+)
 HERMES_BIN = os.getenv("HERMES_BIN", "/home/ubuntu/.hermes/venv/bin/hermes")
 RUN_DIR = Path(os.getenv("CAR_VOICE_RUN_DIR", "/home/ubuntu/.hermes/run/car-voice"))
 WAKE_STT_MODEL = os.getenv(
@@ -74,6 +87,16 @@ EXIT_PHRASES = tuple(
     ).split(",")
     if phrase.strip()
 )
+VISION_PHRASES = tuple(
+    phrase.strip()
+    for phrase in os.getenv(
+        "CAR_VOICE_VISION_PHRASES",
+        "看看前面,看一下前面,看下前面,前面有什么,你看到了什么,"
+        "看看,看一下,看一看,拍张照片,拍照,重新看一下,重新看,"
+        "打开相机,调用相机,摄像头,相机",
+    ).split(",")
+    if phrase.strip()
+)
 
 
 def request_stop(_signum: int, _frame: object) -> None:
@@ -88,6 +111,45 @@ def normalize_text(text: str) -> str:
 def contains_phrase(text: str, phrases: tuple[str, ...]) -> bool:
   normalized = normalize_text(text)
   return any(normalize_text(phrase) in normalized for phrase in phrases)
+
+
+def capture_camera() -> Path | None:
+  """Capture one MJPEG frame from the USB camera."""
+  CAMERA_IMAGE.parent.mkdir(parents=True, exist_ok=True)
+  command = [
+      CAMERA_CAPTURE_BIN,
+      CAMERA_DEVICE,
+      "mjpg",
+      str(CAMERA_IMAGE),
+      str(CAMERA_WIDTH),
+      str(CAMERA_HEIGHT),
+  ]
+  LOG.info(
+      "Capturing camera image: device=%s, size=%sx%s",
+      CAMERA_DEVICE,
+      CAMERA_WIDTH,
+      CAMERA_HEIGHT,
+  )
+  try:
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+  except (OSError, subprocess.SubprocessError) as error:
+    LOG.error("Camera capture failed: %s", error)
+    return None
+
+  if completed.returncode != 0 or not CAMERA_IMAGE.is_file():
+    detail = completed.stderr.strip() or completed.stdout.strip()
+    LOG.error("Camera capture failed: %s", detail or "unknown error")
+    return None
+
+  CAMERA_IMAGE.chmod(0o600)
+  LOG.info("Camera image ready: %s", CAMERA_IMAGE)
+  return CAMERA_IMAGE
 
 
 def save_wav(path: Path, samples: np.ndarray) -> None:
@@ -207,8 +269,17 @@ def parse_hermes_output(stdout: str, stderr: str = "") -> tuple[str, str | None]
   return "\n".join(response_lines).strip(), session_id
 
 
-def ask_hermes(text: str, session_id: str | None) -> tuple[str, str | None]:
-  prompt = text
+def ask_hermes(
+    text: str, session_id: str | None, image_path: Path | None = None
+) -> tuple[str, str | None]:
+  user_prompt = text
+  if image_path is not None:
+    user_prompt = (
+        "本轮附带的是小车刚刚拍摄的前方相机图片。请直接观察图片，"
+        "结合用户的问题简短回答，不要声称无法访问相机。\n"
+        f"用户说：{text}"
+    )
+  prompt = user_prompt
   command = [
       HERMES_BIN,
       "chat",
@@ -220,17 +291,24 @@ def ask_hermes(text: str, session_id: str | None) -> tuple[str, str | None]:
       "--max-turns",
       "12",
   ]
+  if image_path is not None:
+    command.extend(["--image", str(image_path)])
   if session_id:
     command.extend(["--resume", session_id])
   else:
     prompt = (
         "你是安装在智能小车上的中文语音助手。回答应简短、自然、适合直接朗读，"
-        "不要使用 Markdown。当前阶段禁止控制小车或 STM32，只进行对话。\n"
-        f"用户说：{text}"
+        "不要使用 Markdown。当前阶段禁止控制电机或 STM32，但可以观察本轮附带的"
+        "小车相机图片。\n"
+        f"{user_prompt}"
     )
     command[3] = prompt
 
-  LOG.info("Calling Hermes%s", f" session {session_id}" if session_id else "")
+  LOG.info(
+      "Calling Hermes%s%s",
+      f" session {session_id}" if session_id else "",
+      " with camera image" if image_path is not None else "",
+  )
   try:
     completed = subprocess.run(
         command,
@@ -292,9 +370,15 @@ def speak(text: str) -> None:
     LOG.error("TTS/playback failed: %s", error)
 
 
-def conversation_loop() -> None:
+def conversation_loop(
+    initial_text: str | None = None, initial_image: Path | None = None
+) -> None:
   session_id: str | None = None
-  speak("我在，请说。")
+  if initial_text:
+    response, session_id = ask_hermes(initial_text, session_id, initial_image)
+    speak(response)
+  else:
+    speak("我在，请说。")
   active_deadline = time.monotonic() + ACTIVE_TIMEOUT_SECONDS
 
   while not STOP_REQUESTED and time.monotonic() < active_deadline:
@@ -313,7 +397,13 @@ def conversation_loop() -> None:
       return
 
     active_deadline = time.monotonic() + ACTIVE_TIMEOUT_SECONDS
-    response, session_id = ask_hermes(text, session_id)
+    image_path = None
+    if contains_phrase(text, VISION_PHRASES):
+      image_path = capture_camera()
+      if image_path is None:
+        speak("相机抓图失败了，请检查相机连接。")
+        continue
+    response, session_id = ask_hermes(text, session_id, image_path)
     speak(response)
 
   if not STOP_REQUESTED:
@@ -332,12 +422,13 @@ def main() -> int:
 
   LOG.info(
       "Voice daemon ready: input=%s at %s Hz, playback=%s at %s Hz, "
-      "stt=%s, threshold=%s, wake=%s, wake_on_any_speech=%s",
+      "stt=%s, camera=%s, threshold=%s, wake=%s, wake_on_any_speech=%s",
       INPUT_DEVICE,
       SAMPLE_RATE,
       PLAYBACK_DEVICE,
       PLAYBACK_SAMPLE_RATE,
       STT_PROVIDER,
+      CAMERA_DEVICE,
       RMS_THRESHOLD,
       ",".join(WAKE_PHRASES),
       WAKE_ON_ANY_SPEECH,
@@ -355,7 +446,11 @@ def main() -> int:
             "Wake accepted (%s)",
             "phrase" if phrase_matched else "debug any-speech mode",
         )
-        conversation_loop()
+        wake_image = capture_camera()
+        if contains_phrase(text, VISION_PHRASES) and wake_image is not None:
+          conversation_loop(text, wake_image)
+        else:
+          conversation_loop()
       elif text:
         LOG.info("Wake phrase not found")
     except Exception:
