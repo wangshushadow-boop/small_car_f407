@@ -40,6 +40,8 @@ ros2 topic echo /odom
 ros2 topic echo /imu/data
 ros2 topic echo /ultrasonic/front
 ros2 run tf2_ros tf2_echo odom base_link
+ros2 run tf2_ros tf2_echo base_link imu_link
+ros2 run tf2_ros tf2_echo base_link ultrasonic_link
 ```
 
 发送低速前进命令：

@@ -21,8 +21,8 @@ ROS2 运行在树莓派，STM32 负责传感器采集、电机控制、安全逻
 | --- | --- | --- |
 | `/reset_odometry` | `std_srvs/srv/Empty` | 清零 MCU 里程计 |
 | 动态 TF | `odom -> base_link` | 包含坡道高度及横滚、俯仰、航向的三维位姿 |
-| 静态 TF | `base_link -> imu_link` | IMU 安装位姿，待实测 |
-| 静态 TF | `base_link -> ultrasonic_link` | 超声安装位姿，待实测 |
+| URDF 固定关节 | `base_link -> imu_link` | 由 `robot_state_publisher` 发布，安装位姿待实测 |
+| URDF 固定关节 | `base_link -> ultrasonic_link` | 由 `robot_state_publisher` 发布，安装位姿待实测 |
 
 ## 参数
 
@@ -30,5 +30,6 @@ ROS2 运行在树莓派，STM32 负责传感器采集、电机控制、安全逻
 | --- | --- |
 | `rpi_host/config/chassis_params.yaml` | MCU 标定参数，节点启动时整组下发并回读校验 |
 | `rpi_host/ros2_ws/src/small_car_bridge/config/bridge.yaml` | 串口、ROS 坐标系、速度上限、舵机映射和传感器属性 |
+| `rpi_host/ros2_ws/src/small_car_description/urdf/robot_geometry.xacro` | IMU、超声等硬件的实际安装坐标 |
 
 `/cmd_vel` 当前按配置的最大线速度和角速度线性换算为 MCU 的 `[-1000, 1000]` 控制量。电机闭环速度控制尚未完成前，消息单位符合 ROS2 约定，但实际速度精度仍取决于底盘标定和负载。

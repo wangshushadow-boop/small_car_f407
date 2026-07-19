@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- 坐标约定：x 向前，y 向左，z 向上；长度单位为米，角度单位为弧度。 -->
+
+  <!-- 厂家给出的 R3X 四驱底盘外形为 203.5 mm × 145 mm × 76 mm。 -->
+  <xacro:property name="chassis_length" value="0.2035"/>
+  <xacro:property name="chassis_width" value="0.118"/>
+  <xacro:property name="chassis_height" value="0.076"/>
+  <xacro:property name="lower_deck_z" value="-0.026"/>
+  <xacro:property name="main_deck_z" value="0.041"/>
+  <xacro:property name="deck_thickness" value="0.004"/>
+
+  <!-- 轮胎尺寸和轴距按底盘照片估算，里程计仍使用独立标定参数。 -->
+  <xacro:property name="wheelbase" value="0.132"/>
+  <xacro:property name="wheel_track" value="0.121"/>
+  <xacro:property name="wheel_radius" value="0.0325"/>
+  <xacro:property name="wheel_width" value="0.022"/>
+
+  <!-- 新增载荷安装板位于原车上层底盘之上。 -->
+  <xacro:property name="upper_plate_xyz" value="0.005 0.0 0.078"/>
+  <xacro:property name="upper_plate_size" value="0.172 0.108 0.004"/>
+
+  <!-- C30D MCU 主控板水平安装在底盘主承载板和上层载荷板之间。 -->
+  <xacro:property name="mcu_xyz" value="-0.036 0.0 0.055"/>
+  <xacro:property name="mcu_size" value="0.085 0.058 0.004"/>
+
+  <!-- ICM20948 焊接在 MCU 板上，其坐标轴平面与 PCB 平面平行。 -->
+  <xacro:property name="imu_xyz" value="0.022 -0.017 0.006"/>
+  <xacro:property name="imu_rpy" value="0.0 0.0 0.0"/>
+
+  <!-- 前置超声模块的原点位于两个换能器中心，波束沿 +x 方向。 -->
+  <xacro:property name="ultrasonic_xyz" value="0.105 0.0 0.025"/>
+  <xacro:property name="ultrasonic_rpy" value="0.0 0.0 0.0"/>
+
+  <!-- 树莓派安装在车体后半部，圆形音频设备位于其正上方。 -->
+  <xacro:property name="computer_xyz" value="-0.036 0.0 0.105"/>
+  <xacro:property name="computer_size" value="0.085 0.058 0.004"/>
+  <xacro:property name="speaker_xyz" value="-0.036 0.0 0.153"/>
+  <xacro:property name="speaker_radius" value="0.060"/>
+  <xacro:property name="speaker_height" value="0.024"/>
+
+  <!--
+    相机云台位于车体前半部。left_servo_joint 为水平旋转，
+    right_servo_joint 为俯仰旋转，名称与 MCU/桥接节点保持一致。
+  -->
+  <xacro:property name="pan_joint_xyz" value="0.052 0.0 0.082"/>
+  <xacro:property name="tilt_joint_xyz" value="0.0 0.0 0.070"/>
+  <xacro:property name="camera_xyz" value="0.062 0.0 0.120"/>
+  <xacro:property name="camera_size" value="0.022 0.070 0.058"/>
+</robot>

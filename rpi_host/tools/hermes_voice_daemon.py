@@ -92,6 +92,7 @@ VISION_PHRASES = tuple(
     for phrase in os.getenv(
         "CAR_VOICE_VISION_PHRASES",
         "看看前面,看一下前面,看下前面,前面有什么,你看到了什么,"
+        "你看到了啥,看见什么,看见啥,能看到什么,能看到啥,眼前有什么,"
         "看看,看一下,看一看,拍张照片,拍照,重新看一下,重新看,"
         "打开相机,调用相机,摄像头,相机",
     ).split(",")
@@ -111,6 +112,38 @@ def normalize_text(text: str) -> str:
 def contains_phrase(text: str, phrases: tuple[str, ...]) -> bool:
   normalized = normalize_text(text)
   return any(normalize_text(phrase) in normalized for phrase in phrases)
+
+
+def is_vision_request(text: str) -> bool:
+  """Detect colloquial Chinese requests that need a fresh camera frame."""
+  if contains_phrase(text, VISION_PHRASES):
+    return True
+
+  normalized = normalize_text(text)
+  visual_actions = ("看", "看到", "看见", "瞧", "拍", "观察", "识别")
+  visual_targets = (
+      "什么",
+      "啥",
+      "前面",
+      "眼前",
+      "周围",
+      "画面",
+      "图像",
+      "图片",
+      "照片",
+      "这个",
+      "那个",
+      "哪里",
+      "哪儿",
+      "多远",
+      "距离",
+  )
+  has_action = any(term in normalized for term in visual_actions)
+  has_target = any(term in normalized for term in visual_targets)
+  distance_request = any(term in normalized for term in ("多远", "距离")) and any(
+      term in normalized for term in ("这", "那", "前面", "眼前")
+  )
+  return (has_action and has_target) or distance_request
 
 
 def capture_camera() -> Path | None:
@@ -398,7 +431,7 @@ def conversation_loop(
 
     active_deadline = time.monotonic() + ACTIVE_TIMEOUT_SECONDS
     image_path = None
-    if contains_phrase(text, VISION_PHRASES):
+    if is_vision_request(text):
       image_path = capture_camera()
       if image_path is None:
         speak("相机抓图失败了，请检查相机连接。")
@@ -447,7 +480,7 @@ def main() -> int:
             "phrase" if phrase_matched else "debug any-speech mode",
         )
         wake_image = capture_camera()
-        if contains_phrase(text, VISION_PHRASES) and wake_image is not None:
+        if is_vision_request(text) and wake_image is not None:
           conversation_loop(text, wake_image)
         else:
           conversation_loop()
