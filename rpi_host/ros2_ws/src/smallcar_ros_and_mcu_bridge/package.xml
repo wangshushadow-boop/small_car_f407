@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>small_car_bridge</name>
+  <name>smallcar_ros_and_mcu_bridge</name>
   <version>0.1.0</version>
-  <description>C30D STM32 底盘与 ROS2 之间的串口桥接节点。</description>
+  <description>C30D STM32 底盘和 ROS2 之间的串口桥接节点。</description>
   <maintainer email="small-car@example.com">small_car</maintainer>
   <license>Apache-2.0</license>
 

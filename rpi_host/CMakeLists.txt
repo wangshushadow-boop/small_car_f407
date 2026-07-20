@@ -9,7 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(SMALL_CAR_ENABLE_OPENCV "Build OpenCV camera tools" OFF)
 
 add_library(small_car_protocol
-  src/protocol.cpp
+  modules/protocol/protocol.cpp
 )
 target_include_directories(small_car_protocol
   PUBLIC
@@ -20,10 +20,10 @@ if(UNIX)
   find_package(yaml-cpp REQUIRED)
 
   add_library(small_car_host
-    src/audio_device.cpp
-    src/car_client.cpp
-    src/chassis_config.cpp
-    src/serial_port.cpp
+    modules/audio/audio_device.cpp
+    modules/chassis/chassis_config.cpp
+    modules/mcu_client/car_client.cpp
+    modules/transport/serial_port.cpp
   )
   target_link_libraries(small_car_host
     PUBLIC
@@ -43,25 +43,25 @@ if(UNIX)
   )
 
   add_executable(small_car_host_cli
-    src/main.cpp
+    apps/cli/main.cpp
   )
   target_link_libraries(small_car_host_cli
     PRIVATE small_car_host
   )
 
   add_executable(v4l2_capture
-    tools/v4l2_capture.cpp
+    apps/v4l2_capture/v4l2_capture.cpp
   )
 
   add_executable(audio_loopback
-    tools/audio_loopback.cpp
+    apps/audio_loopback/audio_loopback.cpp
   )
   target_link_libraries(audio_loopback
     PRIVATE small_car_host
   )
 
   add_executable(sensor_monitor
-    tools/sensor_monitor.cpp
+    apps/sensor_monitor/sensor_monitor.cpp
   )
   target_link_libraries(sensor_monitor
     PRIVATE small_car_host
@@ -82,7 +82,7 @@ if(SMALL_CAR_ENABLE_OPENCV)
   find_package(OpenCV REQUIRED COMPONENTS core videoio imgcodecs)
 
   add_executable(camera_capture
-    tools/camera_capture.cpp
+    apps/camera_capture/camera_capture.cpp
   )
   target_link_libraries(camera_capture
     PRIVATE ${OpenCV_LIBS}

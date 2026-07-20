@@ -1,6 +1,6 @@
 # ROS2 运行说明
 
-树莓派系统为 Debian Trixie，ROS2 Kilted 使用官方 ARM64 容器运行。STM32 继续负责实时驱动，`small_car_bridge` 负责将串口协议转换成标准 ROS2 接口。
+树莓派系统为 Debian Trixie，ROS2 Kilted 使用官方 ARM64 容器运行。STM32 继续负责实时驱动，`smallcar_ros_and_mcu_bridge` 负责将串口协议转换成标准 ROS2 接口。
 
 ## 启动
 

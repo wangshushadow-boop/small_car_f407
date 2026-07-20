@@ -15,7 +15,7 @@ services:
       bash -lc "source /opt/ros/kilted/setup.bash &&
       colcon build --symlink-install &&
       source install/setup.bash &&
-      ros2 launch small_car_bridge bridge.launch.py"
+      ros2 launch smallcar_ros_and_mcu_bridge bridge.launch.py"
     logging:
       driver: local
       options:

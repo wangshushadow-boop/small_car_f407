@@ -51,7 +51,9 @@ try {
 
   Write-Host "[3/4] Building host tools on Raspberry Pi..."
   $remote_command = @(
+    "cd '$RemoteProject/ros2' 2>/dev/null && docker compose down || true",
     "mkdir -p '$RemoteProject'",
+    "find '$RemoteProject' -mindepth 1 -maxdepth 1 -exec rm -rf {} +",
     "tar -xzf '$remote_archive' -C '$RemoteProject' --strip-components=1",
     "rm -f '$remote_archive'",
     "cmake -E remove_directory '$RemoteProject/build'",

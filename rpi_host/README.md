@@ -1,17 +1,18 @@
 # 树莓派上位机 C++ 模块
 
 本目录是运行在树莓派上的上位机代码。正式运行链路采用 ROS2 Kilted，
-`small_car_bridge` 负责连接 STM32F407；原有命令行、相机和音频程序只保留为硬件诊断工具。
+`smallcar_ros_and_mcu_bridge` 负责连接 STM32F407；原有命令行、相机和音频程序只保留为硬件诊断工具。
 
 ## 目录说明
 
 | 路径 | 说明 |
 | --- | --- |
 | `include/small_car_host/` | 对外头文件，算法模块后续优先引用这里的接口。 |
-| `src/` | 上位机核心模块实现。 |
-| `tools/` | 独立测试工具，例如相机抓图、V4L2 抓图、音频录放。 |
+| `modules/` | 上位机公共模块实现，例如协议、串口、MCU 客户端、底盘参数和音频。 |
+| `apps/` | C++ 独立诊断工具，例如 CLI、传感器监视、相机抓图、V4L2 抓图、音频录放。 |
+| `tools/` | Python 或 Shell 工具，例如语音守护进程、STT 测试和 Jabra 录放脚本。 |
 | `tests/` | 协议相关单元测试。 |
-| `ros2_ws/` | ROS2 工作区和 `small_car_bridge` 标准包。 |
+| `ros2_ws/` | ROS2 工作区，包含 `smallcar_ros_and_mcu_bridge` 和小车 URDF 描述包。 |
 | `ros2/` | ROS2 Kilted ARM64 容器和运行说明。 |
 | `modules.md` | 各模块职责和使用方式说明。 |
 | `raspberry-pi-debug.md` | 树莓派常用调试命令，包括 WiFi、串口、相机、音频和 STM32 烧录。 |

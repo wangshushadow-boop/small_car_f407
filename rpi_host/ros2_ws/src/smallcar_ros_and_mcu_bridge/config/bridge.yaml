@@ -1,4 +1,4 @@
-small_car_bridge:
+smallcar_ros_and_mcu_bridge:
   ros__parameters:
     serial_port: /dev/ttyACM0
     baud_rate: 115200

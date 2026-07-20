@@ -7,19 +7,20 @@
 
 | 模块 | 主要文件 | 职责 | 当前状态 |
 | --- | --- | --- | --- |
-| ROS2 桥接 | `ros2_ws/src/small_car_bridge/` | 将 MCU 协议转换为标准 ROS2 话题、服务和 TF。 | 已实现并在实机验证。 |
+| ROS2 与 MCU 桥接 | `ros2_ws/src/smallcar_ros_and_mcu_bridge/` | 将 MCU 协议转换为标准 ROS2 话题、服务和 TF。 | 已实现并在实机验证。 |
 | 小车模型 | `ros2_ws/src/small_car_description/` | 使用 URDF/Xacro 描述传感器安装关系并发布 TF。 | 框架已实现，安装尺寸待实测。 |
-| 协议模块 | `protocol.hpp` / `protocol.cpp` | 负责二进制帧编码、解码、CRC 校验、帧同步。 | 已实现并有单元测试。 |
-| 串口模块 | `serial_port.hpp` / `serial_port.cpp` | 负责 Linux 串口打开、配置、读写、关闭。 | 已实现。 |
-| 小车客户端 | `car_client.hpp` / `car_client.cpp` | 面向算法层提供干净接口，隐藏串口和协议细节。 | 已实现基础命令和状态接收。 |
-| 命令行工具 | `main.cpp` | 用于临时调试 MCU 通信。 | 已实现。 |
-| 音频模块 | `audio_device.hpp` / `audio_device.cpp` | 使用 ALSA API 录音、播放、保存 WAV。 | 已实现并在树莓派测试通过。 |
-| 音频测试工具 | `tools/audio_loopback.cpp` | 录制一段音频并立即播放。 | 已实现并测试通过。 |
+| 协议模块 | `modules/protocol/protocol.cpp` | 负责二进制帧编码、解码、CRC 校验、帧同步。 | 已实现并有单元测试。 |
+| 串口模块 | `modules/transport/serial_port.cpp` | 负责 Linux 串口打开、配置、读写、关闭。 | 已实现。 |
+| MCU 客户端 | `modules/mcu_client/car_client.cpp` | 面向算法层提供干净接口，隐藏串口和协议细节。 | 已实现基础命令和状态接收。 |
+| 底盘参数模块 | `modules/chassis/chassis_config.cpp` | 读取参数文件并批量下发、校验 MCU 参数。 | 已实现。 |
+| 命令行工具 | `apps/cli/main.cpp` | 用于临时调试 MCU 通信。 | 已实现。 |
+| 音频模块 | `modules/audio/audio_device.cpp` | 使用 ALSA API 录音、播放、保存 WAV。 | 已实现并在树莓派测试通过。 |
+| 音频测试工具 | `apps/audio_loopback/audio_loopback.cpp` | 录制一段音频并立即播放。 | 已实现并测试通过。 |
 | Jabra 录音回放测试 | `tools/jabra_record_playback.sh` | 以 16 kHz 录音，转换为 48 kHz 双声道后从 Jabra 回放。 | 已实现。 |
 | SenseVoice 本地 STT | `tools/sensevoice_transcribe.py` | 使用 sherpa-onnx 和 SenseVoice-Small INT8 将 16 kHz 单声道 WAV 转为文字。 | 已实现。 |
-| 传感器监视工具 | `tools/sensor_monitor.cpp` | 远程查看 IMU、编码器、超声、底盘和设备状态日志。 | 已实现并测试通过。 |
-| OpenCV 相机工具 | `tools/camera_capture.cpp` | 使用 OpenCV 从 USB 摄像头抓取 JPG。 | 已实现并测试过。 |
-| V4L2 相机工具 | `tools/v4l2_capture.cpp` | 不依赖 OpenCV，直接使用 V4L2 抓取 MJPG 或 YUYV。 | 已实现并测试过。 |
+| 传感器监视工具 | `apps/sensor_monitor/sensor_monitor.cpp` | 远程查看 IMU、编码器、超声、底盘和设备状态日志。 | 已实现并测试通过。 |
+| OpenCV 相机工具 | `apps/camera_capture/camera_capture.cpp` | 使用 OpenCV 从 USB 摄像头抓取 JPG。 | 已实现并测试过。 |
+| V4L2 相机工具 | `apps/v4l2_capture/v4l2_capture.cpp` | 不依赖 OpenCV，直接使用 V4L2 抓取 MJPG 或 YUYV。 | 已实现并测试过。 |
 | 协议测试 | `tests/protocol_test.cpp` | 验证协议编码、解码、CRC、帧解析。 | 已实现。 |
 
 ## 协议模块
@@ -103,7 +104,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 可执行文件 | `small_car_host_cli` |
-| 源文件 | `src/main.cpp` |
+| 源文件 | `apps/cli/main.cpp` |
 | 作用 | 手动测试串口协议和 MCU 控制链路。 |
 
 常用命令：
@@ -121,7 +122,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 可执行文件 | `sensor_monitor` |
-| 源文件 | `tools/sensor_monitor.cpp` |
+| 源文件 | `apps/sensor_monitor/sensor_monitor.cpp` |
 | 作用 | 通过串口3协议远程查看 MCU 上传的传感器和状态数据。 |
 
 常用命令：

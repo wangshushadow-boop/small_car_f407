@@ -60,9 +60,9 @@ diagnostic_msgs::msg::KeyValue DiagnosticValue(const std::string& key,
 
 }  // namespace
 
-class SmallCarBridge : public rclcpp::Node {
+class SmallcarRosAndMcuBridge : public rclcpp::Node {
  public:
-  SmallCarBridge() : Node("small_car_bridge") {
+  SmallcarRosAndMcuBridge() : Node("smallcar_ros_and_mcu_bridge") {
     DeclareParameters();
     ReadParameters();
     OpenController();
@@ -71,7 +71,7 @@ class SmallCarBridge : public rclcpp::Node {
                 baud_rate_);
   }
 
-  ~SmallCarBridge() override {
+  ~SmallcarRosAndMcuBridge() override {
     if (client_.IsOpen()) {
       client_.SendStop();
       client_.Close();
@@ -131,8 +131,9 @@ class SmallCarBridge : public rclcpp::Node {
     baud_rate_ = static_cast<int>(get_parameter("baud_rate").as_int());
     chassis_config_ = get_parameter("chassis_config").as_string();
     if (chassis_config_.empty()) {
-      chassis_config_ = ament_index_cpp::get_package_share_directory("small_car_bridge") +
-                        "/config/chassis_params.yaml";
+      chassis_config_ =
+          ament_index_cpp::get_package_share_directory("smallcar_ros_and_mcu_bridge") +
+          "/config/chassis_params.yaml";
     }
     max_linear_speed_mps_ = get_parameter("max_linear_speed_mps").as_double();
     max_angular_speed_rad_s_ = get_parameter("max_angular_speed_rad_s").as_double();
@@ -212,21 +213,23 @@ class SmallCarBridge : public rclcpp::Node {
 
     cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
         "cmd_vel", 10,
-        std::bind(&SmallCarBridge::OnCmdVel, this, std::placeholders::_1));
+        std::bind(&SmallcarRosAndMcuBridge::OnCmdVel, this, std::placeholders::_1));
     servo_sub_ = create_subscription<trajectory_msgs::msg::JointTrajectory>(
         "servo_controller/joint_trajectory", 10,
-        std::bind(&SmallCarBridge::OnServoTrajectory, this, std::placeholders::_1));
+        std::bind(&SmallcarRosAndMcuBridge::OnServoTrajectory, this,
+                  std::placeholders::_1));
     reset_odom_service_ = create_service<std_srvs::srv::Empty>(
         "reset_odometry",
-        std::bind(&SmallCarBridge::OnResetOdometry, this, std::placeholders::_1,
+        std::bind(&SmallcarRosAndMcuBridge::OnResetOdometry, this,
+                  std::placeholders::_1,
                   std::placeholders::_2));
 
     poll_timer_ = create_wall_timer(std::chrono::milliseconds(5),
-                                    std::bind(&SmallCarBridge::PollController, this));
+                                    std::bind(&SmallcarRosAndMcuBridge::PollController, this));
     const auto period = std::chrono::duration<double>(1.0 / command_rate_hz_);
     command_timer_ = create_wall_timer(
         std::chrono::duration_cast<std::chrono::nanoseconds>(period),
-        std::bind(&SmallCarBridge::MaintainCommand, this));
+        std::bind(&SmallcarRosAndMcuBridge::MaintainCommand, this));
   }
 
   void OnCmdVel(const geometry_msgs::msg::Twist::SharedPtr message) {
@@ -549,9 +552,10 @@ class SmallCarBridge : public rclcpp::Node {
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
   try {
-    rclcpp::spin(std::make_shared<small_car_ros::SmallCarBridge>());
+    rclcpp::spin(std::make_shared<small_car_ros::SmallcarRosAndMcuBridge>());
   } catch (const std::exception& error) {
-    RCLCPP_FATAL(rclcpp::get_logger("small_car_bridge"), "%s", error.what());
+    RCLCPP_FATAL(rclcpp::get_logger("smallcar_ros_and_mcu_bridge"), "%s",
+                 error.what());
     rclcpp::shutdown();
     return 1;
   }
