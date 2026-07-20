@@ -15,6 +15,7 @@ struct Options {
   std::string config;
   int baudrate = 115200;
   int interval_ms = 100;
+  bool strict_config = false;
   bool show_imu = false;
   bool show_encoder = false;
   bool show_ultrasonic = false;
@@ -28,7 +29,7 @@ void PrintUsage() {
       << "Usage:\n"
       << "  sensor_monitor [--port /dev/ttyACM0] [--config <path>] [--all]\n"
       << "  sensor_monitor [--imu] [--enc] [--ultra] [--chassis] [--device] [--odom]\n"
-      << "  sensor_monitor [--interval-ms 100]\n\n"
+      << "  sensor_monitor [--interval-ms 100] [--strict-config]\n\n"
       << "Examples:\n"
       << "  sensor_monitor --all\n"
       << "  sensor_monitor --imu --enc --ultra\n"
@@ -50,6 +51,8 @@ bool ParseArgs(int argc, char** argv, Options* options) {
       options->baudrate = std::stoi(argv[++i]);
     } else if (arg == "--interval-ms" && i + 1 < argc) {
       options->interval_ms = std::stoi(argv[++i]);
+    } else if (arg == "--strict-config") {
+      options->strict_config = true;
     } else if (arg == "--imu") {
       options->show_imu = true;
     } else if (arg == "--enc") {
@@ -194,15 +197,23 @@ int main(int argc, char** argv) {
     std::string error;
     if (!small_car::ApplyChassisConfig(
             &client, parameters, std::chrono::milliseconds(800), &error)) {
-      std::cerr << "apply config failed: " << error << "\n";
-      return 3;
+      /*
+       * sensor_monitor 是现场调试工具，核心目标是尽快看到传感器输出。
+       * 如果 MCU 固件暂时没有响应参数协议，直接退出会导致 ENC/ODOM 也看不到。
+       * 因此默认只给出警告并继续监视；需要把参数失败当成错误时使用 --strict-config。
+       */
+      std::cerr << "[CONFIG] warning: apply config failed: " << error << "\n";
+      if (options.strict_config) {
+        return 3;
+      }
+    } else {
+      std::cout << "[CONFIG] source=" << config_path << "\n";
+      for (const auto& parameter : parameters) {
+        std::cout << "[CONFIG] id=" << static_cast<int>(parameter.id)
+                  << " name=" << parameter.name << " value=" << parameter.value << "\n";
+      }
+      std::cout << "[CONFIG] applied=" << parameters.size() << " verified=1\n";
     }
-    std::cout << "[CONFIG] source=" << config_path << "\n";
-    for (const auto& parameter : parameters) {
-      std::cout << "[CONFIG] id=" << static_cast<int>(parameter.id)
-                << " name=" << parameter.name << " value=" << parameter.value << "\n";
-    }
-    std::cout << "[CONFIG] applied=" << parameters.size() << " verified=1\n";
   } catch (const std::exception& error) {
     std::cerr << "load config failed: " << error.what() << "\n";
     return 3;
