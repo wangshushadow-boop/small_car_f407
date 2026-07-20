@@ -45,30 +45,37 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/chassis.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/chassis_auto.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/chassis_manual.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/chassis_params.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/control_mux.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/debug_uart.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/encoder.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/gamepad.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/gamepad_servo.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/gamepad_usb.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/host_link.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/icm20948.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/motor.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/odometry.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/oled.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/raspi_link.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/servo.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/system_status.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ultrasonic.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Actuator/Src/gamepad_servo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Actuator/Src/servo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Chassis/Src/chassis.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Chassis/Src/chassis_auto.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Chassis/Src/chassis_manual.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Chassis/Src/chassis_params.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Chassis/Src/control_mux.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Comm/Src/debug_uart.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Comm/Src/host_link.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Comm/Src/raspi_link.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Comm/Src/system_status.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Display/Src/oled.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Input/Src/gamepad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Input/Src/gamepad_usb.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Motor/Src/encoder.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Motor/Src/motor.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Motor/Src/odometry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Sensors/Src/icm20948.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Sensors/Src/ultrasonic.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Actuator/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Chassis/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Comm/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Display/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Input/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Motor/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Sensors/Inc
 )
 
 # Add project symbols (macros)

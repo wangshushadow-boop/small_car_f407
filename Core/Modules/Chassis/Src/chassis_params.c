@@ -29,8 +29,8 @@ void ChassisParams_Init(void)
   g_params.gamepad_forward_start = 550;
   g_params.gamepad_reverse_start = 320;
   g_params.gamepad_drive_max = 800;
-  g_params.gamepad_turn_start = 260;
-  g_params.gamepad_turn_max = 550;
+  g_params.gamepad_turn_start = 620;
+  g_params.gamepad_turn_max = 850;
   g_params.ultra_near_distance_mm = 200;
   g_params.gyro_lsb_per_dps_x10 = 164;
   g_params.wheel_track_mm = 0;

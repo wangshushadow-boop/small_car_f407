@@ -19,20 +19,20 @@
 
 | 模块 | 文件 | 当前职责 |
 | --- | --- | --- |
-| 通用控制类型 | `Core/Inc/control_types.h` | 定义控制源和运动指令结构。 |
-| 控制仲裁 | `Core/Inc/control_mux.h`、`Core/Src/control_mux.c` | 按安全、手柄、上位机、空闲顺序选择底盘指令。 |
-| USB 手柄 | `Core/Inc/gamepad.h`、`Core/Src/gamepad.c`、`Core/Src/gamepad_usb.c` | 接收 USB 手柄数据，左摇杆输出底盘控制量。 |
-| 手柄舵机控制 | `Core/Inc/gamepad_servo.h`、`Core/Src/gamepad_servo.c` | 右摇杆增量控制两路舵机。 |
-| 串口1调试命令 | `Core/Inc/host_link.h`、`Core/Src/host_link.c` | 处理串口1文本命令和日志开关。 |
-| 树莓派串口3协议 | `Core/Inc/raspi_link.h`、`Core/Src/raspi_link.c` | 处理串口3二进制协议、状态上报和上位机控制命令。 |
-| 串口调试 | `Core/Inc/debug_uart.h`、`Core/Src/debug_uart.c` | 提供调试输出和模块日志开关。 |
-| 底盘执行 | `Core/Inc/chassis.h`、`Core/Src/chassis.c` | 将前进/转向指令混控为四路电机速度。 |
-| 电机驱动 | `Core/Inc/motor.h`、`Core/Src/motor.c` | 将速度转换为 PWM 占空比和方向输出。 |
-| 舵机驱动 | `Core/Inc/servo.h`、`Core/Src/servo.c` | 输出两路 PWM 舵机信号。 |
-| 编码器采集 | `Core/Inc/encoder.h`、`Core/Src/encoder.c` | 采集四路电机编码器累计计数和周期增量。 |
-| IMU | `Core/Inc/icm20948.h`、`Core/Src/icm20948.c` | 读取 ICM20948 加速度、角速度和温度。 |
-| 超声波 | `Core/Inc/ultrasonic.h`、`Core/Src/ultrasonic.c` | 触发测距、计算距离，并提供近距离障碍判断。 |
-| OLED | `Core/Inc/oled.h`、`Core/Src/oled.c` | 初始化 OLED 并显示启动信息。 |
+| 通用控制类型 | `Core/Modules/Chassis/Inc/control_types.h` | 定义控制源和运动指令结构。 |
+| 控制仲裁 | `Core/Modules/Chassis/Inc/control_mux.h`、`Core/Modules/Chassis/Src/control_mux.c` | 按安全、手柄、上位机、空闲顺序选择底盘指令。 |
+| USB 手柄 | `Core/Modules/Input/Inc/gamepad.h`、`Core/Modules/Input/Src/gamepad.c`、`Core/Modules/Input/Src/gamepad_usb.c` | 接收 USB 手柄数据，左摇杆输出底盘控制量。 |
+| 手柄舵机控制 | `Core/Modules/Actuator/Inc/gamepad_servo.h`、`Core/Modules/Actuator/Src/gamepad_servo.c` | 右摇杆增量控制两路舵机。 |
+| 串口1调试命令 | `Core/Modules/Comm/Inc/host_link.h`、`Core/Modules/Comm/Src/host_link.c` | 处理串口1文本命令和日志开关。 |
+| 树莓派串口3协议 | `Core/Modules/Comm/Inc/raspi_link.h`、`Core/Modules/Comm/Src/raspi_link.c` | 处理串口3二进制协议、状态上报和上位机控制命令。 |
+| 串口调试 | `Core/Modules/Comm/Inc/debug_uart.h`、`Core/Modules/Comm/Src/debug_uart.c` | 提供调试输出和模块日志开关。 |
+| 底盘执行 | `Core/Modules/Chassis/Inc/chassis.h`、`Core/Modules/Chassis/Src/chassis.c` | 将前进/转向指令混控为四路电机速度。 |
+| 电机驱动 | `Core/Modules/Motor/Inc/motor.h`、`Core/Modules/Motor/Src/motor.c` | 将速度转换为 PWM 占空比和方向输出。 |
+| 舵机驱动 | `Core/Modules/Actuator/Inc/servo.h`、`Core/Modules/Actuator/Src/servo.c` | 输出两路 PWM 舵机信号。 |
+| 编码器采集 | `Core/Modules/Motor/Inc/encoder.h`、`Core/Modules/Motor/Src/encoder.c` | 采集四路电机编码器累计计数和周期增量。 |
+| IMU | `Core/Modules/Sensors/Inc/icm20948.h`、`Core/Modules/Sensors/Src/icm20948.c` | 读取 ICM20948 加速度、角速度和温度。 |
+| 超声波 | `Core/Modules/Sensors/Inc/ultrasonic.h`、`Core/Modules/Sensors/Src/ultrasonic.c` | 触发测距、计算距离，并提供近距离障碍判断。 |
+| OLED | `Core/Modules/Display/Inc/oled.h`、`Core/Modules/Display/Src/oled.c` | 初始化 OLED 并显示启动信息。 |
 
 ## 运行结构
 

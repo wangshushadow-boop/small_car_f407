@@ -16,10 +16,10 @@ small_car:
     gamepad_drive_max: 800
 
     # 参数 ID 5：手柄转向开始生效时的转向输出，范围 0-1000。
-    gamepad_turn_start: 500
+    gamepad_turn_start: 620
 
     # 参数 ID 6：手柄转向最大输出，范围 0-1000。
-    gamepad_turn_max: 650
+    gamepad_turn_max: 850
 
     # 参数 ID 7：超声避障距离阈值，单位为毫米。
     ultra_near_distance_mm: 200
