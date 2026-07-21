@@ -8,7 +8,8 @@ smallcar_ros_and_mcu_bridge:
     max_angular_speed_rad_s: 2.0
     cmd_vel_timeout_ms: 500
     command_rate_hz: 20.0
-    turn_sign: 1.0
+    # 底盘正转向控制量对应右转，因此取反以符合 ROS 正角速度为左转的约定。
+    turn_sign: -1.0
 
     odom_frame: odom
     base_frame: base_link

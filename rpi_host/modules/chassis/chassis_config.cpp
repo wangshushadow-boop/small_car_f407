@@ -10,6 +10,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -20,6 +21,10 @@
 
 namespace small_car {
 namespace {
+
+constexpr int kParameterApplyAttempts = 3;
+constexpr auto kSerialRetryInterval = std::chrono::milliseconds(5);
+constexpr auto kParameterSettleTime = std::chrono::milliseconds(20);
 
 struct ParameterDefinition {
   std::uint8_t id;
@@ -46,6 +51,30 @@ constexpr std::array<ParameterDefinition, 13> kParameterDefinitions = {{
 
 std::runtime_error ConfigError(const std::string& detail) {
   return std::runtime_error("invalid chassis config: " + detail);
+}
+
+template <typename Sender>
+bool SendWithRetry(CarClient* client, Sender sender,
+                   std::chrono::milliseconds timeout) {
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  do {
+    if (sender()) {
+      return true;
+    }
+
+    // USB 串口短暂繁忙时继续接收 MCU 上行数据，腾出驱动缓冲区后再重试。
+    client->Poll();
+    std::this_thread::sleep_for(kSerialRetryInterval);
+  } while (std::chrono::steady_clock::now() < deadline);
+  return false;
+}
+
+void PollFor(CarClient* client, std::chrono::milliseconds duration) {
+  const auto deadline = std::chrono::steady_clock::now() + duration;
+  while (std::chrono::steady_clock::now() < deadline) {
+    client->Poll();
+    std::this_thread::sleep_for(kSerialRetryInterval);
+  }
 }
 
 }  // namespace
@@ -100,38 +129,61 @@ bool ApplyChassisConfig(CarClient* client,
   }
 
   for (const auto& parameter : parameters) {
-    if (!client->SendParamSet(parameter.id, parameter.value) ||
-        !client->SendParamGet(parameter.id)) {
-      if (error != nullptr) {
-        *error = "failed to send parameter " + parameter.name;
-      }
-      return false;
-    }
-
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
     bool verified = false;
-    while (std::chrono::steady_clock::now() < deadline) {
-      client->Poll();
-      const auto actual = client->GetParamValue();
-      if (actual.has_value() && actual->param_id == parameter.id) {
-        if (actual->value != parameter.value) {
-          if (error != nullptr) {
-            std::ostringstream stream;
-            stream << "parameter verify failed: " << parameter.name
-                   << ", expected=" << parameter.value << ", actual=" << actual->value;
-            *error = stream.str();
-          }
-          return false;
-        }
-        verified = true;
-        break;
+    bool send_failed = false;
+    std::optional<std::int32_t> last_value;
+
+    for (int attempt = 0; attempt < kParameterApplyAttempts && !verified; ++attempt) {
+      send_failed = false;
+      if (!SendWithRetry(client,
+                         [&]() {
+                           return client->SendParamSet(parameter.id, parameter.value);
+                         },
+                         timeout)) {
+        send_failed = true;
+        continue;
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+      // MCU 会先处理 SET 并返回 ACK；稍作等待，避免 SET/GET 连续帧挤满串口缓冲区。
+      PollFor(client, kParameterSettleTime);
+      if (!SendWithRetry(client,
+                         [&]() { return client->SendParamGet(parameter.id); }, timeout)) {
+        send_failed = true;
+        continue;
+      }
+
+      const auto deadline = std::chrono::steady_clock::now() + timeout;
+      while (std::chrono::steady_clock::now() < deadline) {
+        client->Poll();
+        const auto actual = client->GetParamValue();
+        if (actual.has_value() && actual->param_id == parameter.id) {
+          last_value = actual->value;
+          if (actual->value == parameter.value) {
+            verified = true;
+          }
+          break;
+        }
+        std::this_thread::sleep_for(kSerialRetryInterval);
+      }
+
+      if (!verified) {
+        // 两次尝试之间继续清空上行数据，避免旧帧干扰下一次参数回读。
+        PollFor(client, kParameterSettleTime);
+      }
     }
 
     if (!verified) {
       if (error != nullptr) {
-        *error = "parameter verify timeout: " + parameter.name;
+        if (send_failed) {
+          *error = "failed to send parameter after retries: " + parameter.name;
+        } else if (last_value.has_value()) {
+          std::ostringstream stream;
+          stream << "parameter verify failed: " << parameter.name
+                 << ", expected=" << parameter.value << ", actual=" << *last_value;
+          *error = stream.str();
+        } else {
+          *error = "parameter verify timeout after retries: " + parameter.name;
+        }
       }
       return false;
     }

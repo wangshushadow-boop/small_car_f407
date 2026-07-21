@@ -34,5 +34,6 @@ void RaspiLink_SendOdometryDebug(uint32_t odom_time_ms,
                                  int16_t left_delta_mm,
                                  int16_t right_delta_mm);
 void RaspiLink_OnUartRxCpltCallback(UART_HandleTypeDef *huart);
+void RaspiLink_OnUartErrorCallback(UART_HandleTypeDef *huart);
 
 #endif  // RASPI_LINK_H_

@@ -233,6 +233,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   RaspiLink_OnUartRxCpltCallback(huart);
 }
 
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+  RaspiLink_OnUartErrorCallback(huart);
+}
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   Ultrasonic_OnEchoEdge(GPIO_Pin);

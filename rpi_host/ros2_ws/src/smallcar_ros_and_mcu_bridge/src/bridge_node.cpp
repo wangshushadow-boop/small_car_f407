@@ -79,6 +79,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     ReadParameters();
     OpenController();
     CreateRosInterfaces();
+    ApplyControllerConfig();
     RCLCPP_INFO(get_logger(), "ROS2 bridge ready: %s @ %d", serial_port_.c_str(),
                 baud_rate_);
   }
@@ -200,12 +201,20 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     if (!client_.Open(serial_port_, baud_rate_)) {
       throw std::runtime_error("cannot open serial port: " + serial_port_);
     }
+  }
+
+  void ApplyControllerConfig() {
     const auto parameters = small_car::LoadChassisConfig(chassis_config_);
     std::string error;
     if (!small_car::ApplyChassisConfig(&client_, parameters,
                                        std::chrono::milliseconds(500), &error)) {
-      client_.Close();
-      throw std::runtime_error("cannot apply chassis config: " + error);
+      /*
+       * 参数下发失败不能阻止 ROS2 bridge 启动。
+       * 串口链路偶尔会因为 MCU 正在连续上报数据而错过参数回读，此时传感器发布、
+       * cmd_vel 控制和后续手动重试仍然应该可用。
+       */
+      RCLCPP_WARN(get_logger(), "chassis config not verified: %s", error.c_str());
+      return;
     }
     RCLCPP_INFO(get_logger(), "applied and verified %zu chassis parameters",
                 parameters.size());
@@ -251,7 +260,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
         ScaleCommand(message->angular.z * turn_sign_, max_angular_speed_rad_s_);
     last_cmd_vel_time_ = std::chrono::steady_clock::now();
     have_cmd_vel_ = true;
-    client_.SendDrive(forward_command_, turn_command_);
+    last_control_send_ok_ = client_.SendDrive(forward_command_, turn_command_);
   }
 
   static std::int16_t ScaleCommand(double value, double maximum) {
@@ -261,13 +270,13 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
 
   void MaintainCommand() {
     if (!have_cmd_vel_) {
-      client_.SendHeartbeat();
+      last_control_send_ok_ = client_.SendHeartbeat();
     } else if (std::chrono::steady_clock::now() - last_cmd_vel_time_ >
                cmd_vel_timeout_) {
-      client_.SendStop();
+      last_control_send_ok_ = client_.SendStop();
       have_cmd_vel_ = false;
     } else {
-      client_.SendDrive(forward_command_, turn_command_);
+      last_control_send_ok_ = client_.SendDrive(forward_command_, turn_command_);
     }
   }
 
@@ -499,7 +508,31 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
         DiagnosticValue("ultrasonic", value->ultra_ok ? "ready" : "timeout"),
         DiagnosticValue("error_code", std::to_string(value->error)),
         DiagnosticValue("mcu_time_ms", std::to_string(value->mcu_time_ms)),
+        DiagnosticValue("host_forward", std::to_string(forward_command_)),
+        DiagnosticValue("host_turn", std::to_string(turn_command_)),
+        DiagnosticValue("serial_write", last_control_send_ok_ ? "ok" : "failed"),
     };
+
+    const auto chassis = client_.GetChassisStatus();
+    if (chassis.has_value()) {
+      status.values.push_back(
+          DiagnosticValue("control_source", std::to_string(chassis->source)));
+      status.values.push_back(
+          DiagnosticValue("control_enabled", chassis->enabled ? "true" : "false"));
+      status.values.push_back(
+          DiagnosticValue("mcu_forward", std::to_string(chassis->forward)));
+      status.values.push_back(DiagnosticValue("mcu_turn", std::to_string(chassis->turn)));
+      status.values.push_back(
+          DiagnosticValue("ultrasonic_mm", std::to_string(chassis->ultra_mm)));
+    }
+
+    const auto ack = client_.GetLastAck();
+    if (ack.has_value()) {
+      status.values.push_back(
+          DiagnosticValue("last_ack_msg", std::to_string(ack->ack_msg)));
+      status.values.push_back(
+          DiagnosticValue("last_ack_result", std::to_string(ack->result)));
+    }
     array.status.push_back(std::move(status));
     diagnostics_pub_->publish(array);
   }
@@ -533,6 +566,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   std::chrono::milliseconds cmd_vel_timeout_{500};
   std::chrono::steady_clock::time_point last_cmd_vel_time_{};
   bool have_cmd_vel_ = false;
+  bool last_control_send_ok_ = true;
   std::int16_t forward_command_ = 0;
   std::int16_t turn_command_ = 0;
   ServoMapping left_servo_;

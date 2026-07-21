@@ -42,7 +42,10 @@ SerialPort::~SerialPort() {
 bool SerialPort::Open(const std::string& device, int baudrate) {
   Close();
 
-  // O_NONBLOCK 让上层 Poll() 可以周期调用，不会因为串口暂时没数据卡住。
+  /*
+   * 使用 O_NONBLOCK 打开串口，让上层 Poll() 不会因为暂时没有数据而卡住。
+   * 写入接口内部带有限次重试，避免 USB CDC 短暂不可写时无限占用主循环。
+   */
   fd_ = open(device.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
   if (fd_ < 0) {
     return false;
@@ -112,14 +115,25 @@ bool SerialPort::Write(const std::vector<std::uint8_t>& data) {
   }
 
   std::size_t written = 0;
+  int retry_count = 0;
+  constexpr int kMaxTemporaryWriteRetries = 50;
   while (written < data.size()) {
     const ssize_t n = write(fd_, data.data() + written, data.size() - written);
     if (n > 0) {
       written += static_cast<std::size_t>(n);
+      retry_count = 0;
       continue;
     }
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-      // 非阻塞写入可能短暂不可写，重试即可。
+      /*
+       * 非阻塞写入可能短暂不可写，但不能无限自旋。
+       * ROS2 bridge 和 sensor_monitor 都在主循环里调用写接口，如果这里一直重试，
+       * 上层就没有机会继续读取 MCU 数据，表现为节点还活着但话题不再发布。
+       */
+      if (++retry_count > kMaxTemporaryWriteRetries) {
+        return false;
+      }
+      usleep(1000);
       continue;
     }
     return false;

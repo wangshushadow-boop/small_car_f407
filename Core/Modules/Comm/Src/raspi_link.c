@@ -263,6 +263,25 @@ void RaspiLink_OnUartRxCpltCallback(UART_HandleTypeDef *huart)
   (void)HAL_UART_Receive_IT(&huart3, &g_rx_byte, 1U);
 }
 
+void RaspiLink_OnUartErrorCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance != USART3)
+  {
+    return;
+  }
+
+  /*
+   * USART 发生溢出、噪声或帧错误后，HAL 会终止当前中断接收。
+   * 如果不重新启动，MCU 仍能向树莓派发送传感器数据，但再也收不到控制命令。
+   * 丢弃错误发生前未完成的半帧，并从下一帧帧头重新同步。
+   */
+  g_rx_head = 0U;
+  g_rx_tail = 0U;
+  ResetParser();
+  __HAL_UART_CLEAR_PEFLAG(huart);
+  (void)HAL_UART_Receive_IT(&huart3, &g_rx_byte, 1U);
+}
+
 static bool PopRxByte(uint8_t *data)
 {
   if ((data == NULL) || (g_rx_tail == g_rx_head))
