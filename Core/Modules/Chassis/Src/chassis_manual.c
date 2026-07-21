@@ -1,5 +1,12 @@
 #include "chassis_manual.h"
 
+/*
+ * 手动底盘控制算法。
+ *
+ * 输入 forward/turn 两个控制量，输出四轮差速。
+ * 小转向时先降低一侧轮速，转向量足够大时再允许一侧反转，手感更柔和。
+ */
+
 #include <stddef.h>
 
 #include "motor.h"

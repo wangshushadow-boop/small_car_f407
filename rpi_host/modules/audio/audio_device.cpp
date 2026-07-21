@@ -1,5 +1,12 @@
 #include "small_car_host/audio_device.hpp"
 
+/*
+ * ALSA 音频设备封装。
+ *
+ * 当前主要用于 USB 麦克风和音响测试。这里把录音、播放、WAV 文件读写封装起来，
+ * 方便后续语音模块复用，而不直接在业务代码里散落 ALSA API。
+ */
+
 #include <alsa/asoundlib.h>
 
 #include <algorithm>

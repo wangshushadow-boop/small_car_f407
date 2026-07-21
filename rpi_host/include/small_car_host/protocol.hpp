@@ -11,11 +11,13 @@
 
 namespace small_car {
 
+// 串口协议固定字段。协议版本和帧头必须和 MCU 侧 raspi_link.c 保持一致。
 constexpr std::uint8_t kProtocolVersion = 0x01;
 constexpr std::uint8_t kSync0 = 0xAA;
 constexpr std::uint8_t kSync1 = 0x55;
 constexpr std::size_t kMaxPayloadSize = 64;
 
+// 消息类型分为两段：0x01-0x7F 为树莓派下发，0x80 以上为 MCU 上传。
 enum class Msg : std::uint8_t {
   kControl = 0x01,
   kServo = 0x02,
@@ -32,8 +34,11 @@ enum class Msg : std::uint8_t {
 };
 
 struct Frame {
+  // 原始消息类型，保留为 uint8_t 方便处理未知消息。
   std::uint8_t msg = 0;
+  // 帧序号由发送方递增，用于 ACK 和后续排查丢帧。
   std::uint8_t seq = 0;
+  // 不包含帧头、版本、消息类型、序号、长度和 CRC 的负载数据。
   std::vector<std::uint8_t> payload;
 };
 
@@ -76,6 +81,7 @@ std::optional<DecodedMessage> DecodePayload(const Frame& frame);
 
 class FrameParser {
  public:
+  // Feed 可以多次喂入任意长度字节流，内部会处理半包、粘包和噪声。
   std::vector<Frame> Feed(const std::uint8_t* data, std::size_t size);
   std::vector<Frame> Feed(const std::vector<std::uint8_t>& data);
   void Reset();
@@ -86,6 +92,7 @@ class FrameParser {
 
 class PacketCodec {
  public:
+  // PacketCodec 负责自动递增 seq，调用方只需要关心具体业务命令。
   std::vector<std::uint8_t> Heartbeat();
   std::vector<std::uint8_t> Stop();
   std::vector<std::uint8_t> Drive(std::int16_t forward, std::int16_t turn);

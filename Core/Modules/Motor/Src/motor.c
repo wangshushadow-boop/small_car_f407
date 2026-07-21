@@ -1,5 +1,12 @@
 #include "motor.h"
 
+/*
+ * 四路直流电机 PWM 驱动模块。
+ *
+ * C30D 板载 AT8236 驱动，每个电机由两路 PWM 控制方向和占空比。
+ * 本模块只负责“目标速度 -> PWM 输出”，更高层的差速算法放在 Chassis 模块。
+ */
+
 #include "debug_uart.h"
 #include "main.h"
 #include "tim.h"

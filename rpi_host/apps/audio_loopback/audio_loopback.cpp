@@ -1,5 +1,11 @@
 #include "small_car_host/audio_device.hpp"
 
+/*
+ * 音频回环测试工具。
+ *
+ * 先录制一段 WAV，再播放出来，用于验证 USB 麦克风和音响是否都工作正常。
+ */
+
 #include <cstdint>
 #include <exception>
 #include <iostream>

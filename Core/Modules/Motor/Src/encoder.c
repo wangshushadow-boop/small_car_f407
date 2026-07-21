@@ -1,5 +1,12 @@
 #include "encoder.h"
 
+/*
+ * 四路电机编码器采集模块。
+ *
+ * CubeMX 将定时器配置为 Encoder Mode，本模块周期读取计数器增量。
+ * 输出的是本周期增量，不是累计里程；里程融合由 odometry.c 完成。
+ */
+
 #include "main.h"
 #include "tim.h"
 

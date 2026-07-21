@@ -1,5 +1,12 @@
 #include "icm20948.h"
 
+/*
+ * ICM20948 IMU 驱动模块。
+ *
+ * 通过 I2C 读取加速度和陀螺仪原始值。
+ * 本模块只负责寄存器初始化和原始数据读取，姿态融合在 odometry.c 中完成。
+ */
+
 #include <stddef.h>
 
 #include "i2c.h"

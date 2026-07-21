@@ -3,6 +3,12 @@
 #include <fstream>
 #include <vector>
 
+/*
+ * 简单旋律生成工具。
+ *
+ * 生成一个 WAV 文件，方便没有现成音乐文件时测试 USB 音响播放链路。
+ */
+
 static void WriteU16(std::ofstream &file, uint16_t value) {
   file.put(static_cast<char>(value & 0xff));
   file.put(static_cast<char>((value >> 8) & 0xff));

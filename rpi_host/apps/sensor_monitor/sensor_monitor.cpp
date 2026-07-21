@@ -1,6 +1,13 @@
 #include "small_car_host/car_client.hpp"
 #include "small_car_host/chassis_config.hpp"
 
+/*
+ * 传感器监视工具。
+ *
+ * 用于在树莓派命令行直接查看 MCU 上传的数据，调试时通常会先停止 ROS2 bridge，
+ * 再运行本工具独占串口。默认会尝试下发 YAML 参数，但参数失败时仍继续打印数据。
+ */
+
 #include <chrono>
 #include <cstdint>
 #include <exception>

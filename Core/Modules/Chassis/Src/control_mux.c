@@ -1,5 +1,12 @@
 #include "control_mux.h"
 
+/*
+ * 控制源仲裁模块。
+ *
+ * 手柄、树莓派和后续自动驾驶都可能产生底盘命令。
+ * 这里统一选择最终生效的命令，并叠加前向超声避障限制。
+ */
+
 #include <stddef.h>
 
 #include "gamepad.h"

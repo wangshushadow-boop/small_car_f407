@@ -1,5 +1,12 @@
 #include "gamepad_servo.h"
 
+/*
+ * 手柄控制云台舵机模块。
+ *
+ * 当前策略是增量控制：右摇杆偏离中心时逐步改变舵机脉宽，
+ * 摇杆松手后保持当前位置，而不是自动回中。
+ */
+
 #include <stdint.h>
 
 #include "gamepad.h"

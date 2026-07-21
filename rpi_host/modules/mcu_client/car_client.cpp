@@ -1,5 +1,14 @@
 #include "small_car_host/car_client.hpp"
 
+/*
+ * MCU 客户端模块。
+ *
+ * CarClient 是上位机其它模块访问 MCU 的统一入口：
+ * - 对外提供语义化方法，例如 SendDrive、SendServo、SendParamSet。
+ * - 内部负责调用协议编码、串口收发和最近一帧状态缓存。
+ * - CLI、sensor_monitor 和 ROS2 bridge 都通过它复用同一套通信逻辑。
+ */
+
 namespace small_car {
 
 bool CarClient::Open(const std::string& device, int baudrate) {

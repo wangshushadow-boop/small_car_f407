@@ -5,6 +5,13 @@
 #include <string>
 #include <thread>
 
+/*
+ * MCU 命令行调试工具。
+ *
+ * 该程序面向手动排错：发送心跳、停车、底盘速度、舵机脉宽和里程计清零命令。
+ * 更完整的传感器观察使用 sensor_monitor，ROS2 场景使用 bridge。
+ */
+
 #include "small_car_host/car_client.hpp"
 #include "small_car_host/chassis_config.hpp"
 

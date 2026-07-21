@@ -1,5 +1,12 @@
 #include "chassis.h"
 
+/*
+ * 底盘总控模块。
+ *
+ * 接收仲裁后的 ControlCommand，根据来源选择手动或自动控制算法，
+ * 最终把左右侧轮子的目标速度写入 Motor 模块。
+ */
+
 #include <stddef.h>
 
 #include "chassis_auto.h"

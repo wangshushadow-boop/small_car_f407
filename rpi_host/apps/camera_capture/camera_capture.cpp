@@ -1,6 +1,13 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/videoio.hpp>
 
+/*
+ * OpenCV 相机抓图工具。
+ *
+ * 用于快速验证 USB 摄像头能否被 OpenCV 打开，并保存一张 jpg 图片。
+ * 如果 OpenCV 失败，再使用 v4l2_capture 排查底层格式和驱动问题。
+ */
+
 #include <chrono>
 #include <cstdlib>
 #include <iostream>

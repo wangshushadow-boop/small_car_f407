@@ -1,5 +1,12 @@
 #include "chassis_auto.h"
 
+/*
+ * 自动底盘控制算法预留模块。
+ *
+ * 后续 ROS2 导航或树莓派算法控制底盘时可在这里扩展。
+ * 当前保持简单透传，避免 MCU 端提前引入复杂策略。
+ */
+
 #include <stddef.h>
 
 #include "motor.h"

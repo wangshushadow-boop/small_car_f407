@@ -1,5 +1,12 @@
 #include "ultrasonic.h"
 
+/*
+ * 超声测距模块。
+ *
+ * Trigger 引脚发出触发脉冲，Echo 引脚通过外部中断记录高电平持续时间。
+ * 距离由声波往返时间换算得到，并用于前向近距离保护和树莓派上传。
+ */
+
 #include <stddef.h>
 
 #include "chassis_params.h"

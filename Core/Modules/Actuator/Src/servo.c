@@ -1,5 +1,12 @@
 #include "servo.h"
 
+/*
+ * PWM 舵机驱动模块。
+ *
+ * 舵机使用 20 ms 周期 PWM，脉宽单位为 us。
+ * 业务层只传目标脉宽，本模块负责限幅、启动定时器 PWM、写入 CCR。
+ */
+
 #include "debug_uart.h"
 #include "main.h"
 #include "tim.h"

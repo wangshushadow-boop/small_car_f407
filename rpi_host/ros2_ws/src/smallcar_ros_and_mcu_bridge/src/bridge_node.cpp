@@ -27,6 +27,17 @@
 #include "small_car_host/car_client.hpp"
 #include "small_car_host/chassis_config.hpp"
 
+/*
+ * ROS2 与 MCU 桥接节点。
+ *
+ * 该节点是树莓派上位机的正式运行入口：
+ * - 订阅 ROS2 控制命令并转换成 MCU 串口协议。
+ * - 读取 MCU 上传的 IMU、编码器、超声、里程计和诊断状态。
+ * - 发布 ROS2 标准话题、服务和 TF，供后续导航、视觉、语音算法复用。
+ *
+ * 注意：节点启动时会打开串口并独占设备，运行 sensor_monitor 或 CLI 前需要先停止 bridge。
+ */
+
 namespace small_car_ros {
 namespace {
 
@@ -63,6 +74,7 @@ diagnostic_msgs::msg::KeyValue DiagnosticValue(const std::string& key,
 class SmallcarRosAndMcuBridge : public rclcpp::Node {
  public:
   SmallcarRosAndMcuBridge() : Node("smallcar_ros_and_mcu_bridge") {
+    // 构造阶段只做一次性初始化：读取 ROS 参数、打开串口、下发底盘参数、创建话题和定时器。
     DeclareParameters();
     ReadParameters();
     OpenController();
@@ -72,6 +84,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   }
 
   ~SmallcarRosAndMcuBridge() override {
+    // 节点退出时主动停车，避免进程异常结束后 MCU 继续保持最后一次运动命令。
     if (client_.IsOpen()) {
       client_.SendStop();
       client_.Close();

@@ -1,5 +1,12 @@
 #include "gamepad_usb.h"
 
+/*
+ * USB 手柄解码模块。
+ *
+ * USB Host 中间件识别到手柄接收器后，会把 HID 中断端点数据交给这里解析。
+ * 本模块只做厂商 USB 手柄数据格式适配，解析结果统一写入 Gamepad_UpdateFromUsb()。
+ */
+
 #include <stdbool.h>
 #include <string.h>
 

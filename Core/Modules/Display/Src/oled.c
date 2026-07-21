@@ -1,5 +1,12 @@
 #include "oled.h"
 
+/*
+ * OLED 显示模块。
+ *
+ * OLED 只显示最关键的运行状态，避免把调试串口的大量信息搬到屏幕上。
+ * 详细传感器数据仍以串口和树莓派工具为主。
+ */
+
 #include <stddef.h>
 #include <string.h>
 

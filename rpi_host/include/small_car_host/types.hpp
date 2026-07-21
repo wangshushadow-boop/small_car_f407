@@ -5,6 +5,8 @@
 
 namespace small_car {
 
+// 下面这些结构体是 MCU 协议解码后的“业务数据”，字段单位尽量直接写在命名中。
+
 enum class ControlSource : std::uint8_t {
   kNone = 0,
   kHost = 1,
@@ -62,6 +64,7 @@ struct DeviceStatus {
 
 struct Odometry {
   std::uint32_t mcu_time_ms = 0;
+  // 位置单位为毫米，角度单位为 mdeg，便于 MCU 端整数传输。
   std::int32_t x_mm = 0;
   std::int32_t y_mm = 0;
   std::int32_t z_mm = 0;

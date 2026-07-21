@@ -4,6 +4,13 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+/*
+ * V4L2 相机抓图工具。
+ *
+ * 用于绕过 OpenCV，直接验证 USB 摄像头在 Linux 下的格式、分辨率和原始输出。
+ * 支持 MJPG 保存为 jpg，也支持 YUYV 保存为原始 yuyv 文件。
+ */
+
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>

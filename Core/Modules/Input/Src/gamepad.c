@@ -1,5 +1,12 @@
 #include "gamepad.h"
 
+/*
+ * 手柄业务层。
+ *
+ * gamepad_usb 负责解析 USB HID 原始数据，本文件只关心统一后的 GamepadState。
+ * 左摇杆映射为底盘前进和转向，起步力、最大输出等手感参数来自 ChassisParams。
+ */
+
 #include <string.h>
 
 #include "chassis_params.h"

@@ -1,5 +1,12 @@
 #include "odometry.h"
 
+/*
+ * MCU 端里程计融合模块。
+ *
+ * 输入四路编码器增量、ICM20948 加速度和陀螺仪，输出三维位置、累计距离、
+ * 速度以及 roll/pitch/yaw。复杂定位算法留给 ROS2 侧，这里保持轻量实时。
+ */
+
 #include <math.h>
 #include <stddef.h>
 

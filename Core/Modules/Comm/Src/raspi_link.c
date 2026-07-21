@@ -1,5 +1,12 @@
 #include "raspi_link.h"
 
+/*
+ * 树莓派通信模块。
+ *
+ * USART3 接收树莓派发来的二进制短帧，MCU 在任务中解析命令并上传状态。
+ * 这里仅负责协议收发和命令分发，耗时控制逻辑放到 Chassis、Motor、Servo 等模块。
+ */
+
 #include <stddef.h>
 #include <string.h>
 

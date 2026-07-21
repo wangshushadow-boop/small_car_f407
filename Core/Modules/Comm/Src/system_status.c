@@ -1,5 +1,12 @@
 #include "system_status.h"
 
+/*
+ * 系统状态汇总模块。
+ *
+ * 周期采集各业务模块的最新状态，并按需输出到调试串口、树莓派链路和 OLED。
+ * 这样日志输出集中管理，不需要各模块自己决定什么时候刷屏。
+ */
+
 #include <stdio.h>
 
 #include "debug_uart.h"

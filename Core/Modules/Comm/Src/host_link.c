@@ -1,5 +1,12 @@
 #include "host_link.h"
 
+/*
+ * PC 调试串口命令模块。
+ *
+ * USART1 面向串口助手，负责解析人工输入的文本命令并控制日志开关。
+ * 该模块不参与实时控制，只用于学习、调试和现场排错。
+ */
+
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>

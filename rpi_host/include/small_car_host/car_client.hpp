@@ -11,6 +11,7 @@
 
 namespace small_car {
 
+// 上位机访问 MCU 的统一客户端。该类不创建后台线程，调用方需要周期调用 Poll()。
 class CarClient {
  public:
   bool Open(const std::string& device, int baudrate = 115200);
@@ -25,8 +26,10 @@ class CarClient {
   bool SendParamSet(std::uint8_t param_id, std::int32_t value);
   bool SendParamGet(std::uint8_t param_id);
 
+  // 从串口读取可用数据并更新最近一帧缓存；CLI、monitor、ROS2 bridge 都依赖这个入口。
   void Poll();
 
+  // 以下 Get 方法返回最近一次收到的对应消息；没有收到过时返回 std::nullopt。
   std::optional<ChassisStatus> GetChassisStatus() const;
   std::optional<EncoderDelta> GetEncoderDelta() const;
   std::optional<ImuRaw> GetImuRaw() const;
