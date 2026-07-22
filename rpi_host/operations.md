@@ -66,11 +66,18 @@ ros2 run tf2_ros tf2_echo odom base_link
 ros2 service call /reset_odometry std_srvs/srv/Empty "{}"
 ```
 
-发送低速前进：
+持续发送低速前进，结束后按 `Ctrl+C`：
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist \
+  "{linear: {x: 0.5}, angular: {z: 0.0}}"
+```
+
+发送停车命令：
 
 ```bash
 ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \
-  "{linear: {x: 0.1}, angular: {z: 0.0}}"
+  "{linear: {x: 0.0}, angular: {z: 0.0}}"
 ```
 
 ROS2 话题：
@@ -104,6 +111,33 @@ ROS2 相关参数：
 | `rpi_host/ros2_ws/src/small_car_description/urdf/robot_geometry.xacro` | IMU、超声、相机、树莓派、MCU 等硬件安装坐标。 |
 
 `/cmd_vel` 使用 ROS2 标准单位。bridge 将线速度转换为 `mm/s`、角速度转换为 `mrad/s` 后通过协议 v2 下发；MCU 当前仍按标定上限换算为开环电机输出。电机闭环完成前，实际速度精度仍取决于负载、电量和地面摩擦。
+
+## WSL 远程连接 ROS2
+
+Windows 和树莓派连接同一局域网后，在 WSL 中执行：
+
+```bash
+source /opt/ros/kilted/setup.bash
+export ROS_DOMAIN_ID=0
+export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+export FASTDDS_DEFAULT_PROFILES_FILE=/mnt/d/stm32/demo/small_car_f407/rpi_host/config/fastdds_wsl.xml
+
+ros2 daemon stop
+pkill -f _ros2_daemon || true
+ros2 daemon start
+```
+
+`fastdds_wsl.xml` 将 Fast DDS 固定到 PC 局域网地址，避免 WSL mirrored 网络向树莓派通告不可访问的虚拟接口。PC 地址变化后，需要同步修改该文件中的地址。
+
+确认树莓派 bridge 已被发现：
+
+```bash
+ros2 topic info /cmd_vel --verbose
+```
+
+输出中的 `Subscription count` 应为 `1`。Fast DDS 跨 WSL 时节点名可能显示为 `NODE_NAME_UNKNOWN`，不影响话题收发。
+
+当前开环映射中，`2.0 rad/s` 对应电机输出 `1000`。实测转向起步输出约为 `620`，因此角速度通常需要达到约 `1.24 rad/s` 才能克服静摩擦；后续接入轮速闭环后再消除该限制。
 
 ## 参数调试
 
