@@ -45,6 +45,8 @@ void ChassisParams_Init(void)
   g_params.attitude_gyro_weight_permille = 980;
   g_params.imu_roll_offset_mdeg = 0;
   g_params.imu_pitch_offset_mdeg = 0;
+  g_params.max_linear_speed_mm_s = 600;
+  g_params.max_angular_speed_mrad_s = 2000;
 }
 
 bool ChassisParams_Set(ChassisParamId id, int32_t value)
@@ -105,6 +107,14 @@ bool ChassisParams_Set(ChassisParamId id, int32_t value)
 
     case CHASSIS_PARAM_IMU_PITCH_OFFSET_MDEG:
       g_params.imu_pitch_offset_mdeg = ClampI16Param(value, -30000, 30000);
+      return true;
+
+    case CHASSIS_PARAM_MAX_LINEAR_SPEED_MM_S:
+      g_params.max_linear_speed_mm_s = ClampI16Param(value, 100, 3000);
+      return true;
+
+    case CHASSIS_PARAM_MAX_ANGULAR_SPEED_MRAD_S:
+      g_params.max_angular_speed_mrad_s = ClampI16Param(value, 100, 10000);
       return true;
 
     default:
@@ -171,6 +181,14 @@ bool ChassisParams_GetValue(ChassisParamId id, int32_t *value)
 
     case CHASSIS_PARAM_IMU_PITCH_OFFSET_MDEG:
       *value = g_params.imu_pitch_offset_mdeg;
+      return true;
+
+    case CHASSIS_PARAM_MAX_LINEAR_SPEED_MM_S:
+      *value = g_params.max_linear_speed_mm_s;
+      return true;
+
+    case CHASSIS_PARAM_MAX_ANGULAR_SPEED_MRAD_S:
+      *value = g_params.max_angular_speed_mrad_s;
       return true;
 
     default:

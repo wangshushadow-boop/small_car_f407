@@ -11,6 +11,7 @@
 
 #include "chassis_params.h"
 #include "debug_uart.h"
+#include "main.h"
 #include "motor.h"
 
 /* 手柄摇杆中心值。原始数据约为 0-255，中间位置约为 127。 */
@@ -25,6 +26,9 @@
 
 /* 手柄原始数据调试打印周期，数值越大打印越少。 */
 #define GAMEPAD_DEBUG_PERIOD 10U
+
+/* 手柄最后一次有效操作后继续保持控制权，确保摇杆回中能先让车辆停车。 */
+#define GAMEPAD_CONTROL_HOLD_MS 2000U
 
 /*
  * 向前拨动时的最低起步输出。
@@ -67,7 +71,24 @@ static GamepadState g_gamepad_state = {
 };
 
 static bool g_last_connected = false;
+static bool g_has_control_activity = false;
+static uint32_t g_last_activity_tick = 0U;
 static uint32_t g_debug_counter = 0U;
+
+static bool IsAxisActive(uint8_t value)
+{
+  const int16_t offset = (int16_t)value - GAMEPAD_CENTER_VALUE;
+  return (offset <= -GAMEPAD_DEADBAND) || (offset >= GAMEPAD_DEADBAND);
+}
+
+static bool IsGamepadActive(void)
+{
+  if (!g_gamepad_state.connected || !g_has_control_activity)
+  {
+    return false;
+  }
+  return (HAL_GetTick() - g_last_activity_tick) <= GAMEPAD_CONTROL_HOLD_MS;
+}
 
 static int16_t ApplyDeadband(int16_t value)
 {
@@ -167,11 +188,12 @@ bool Gamepad_GetControlCommand(ControlCommand *command)
   }
 
   command->source = CONTROL_SOURCE_GAMEPAD;
+  command->value_type = CONTROL_VALUE_NORMALIZED;
   command->enabled = false;
   command->forward = 0;
   command->turn = 0;
 
-  if (!g_gamepad_state.connected)
+  if (!IsGamepadActive())
   {
     return false;
   }
@@ -208,4 +230,17 @@ void Gamepad_UpdateFromUsb(bool connected,
   g_gamepad_state.rx = rx;
   g_gamepad_state.ry = ry;
   g_gamepad_state.buttons = buttons;
+
+  if (!connected)
+  {
+    g_has_control_activity = false;
+    return;
+  }
+
+  if (IsAxisActive(lx) || IsAxisActive(ly) || IsAxisActive(rx) ||
+      IsAxisActive(ry) || (buttons != 0U))
+  {
+    g_has_control_activity = true;
+    g_last_activity_tick = HAL_GetTick();
+  }
 }

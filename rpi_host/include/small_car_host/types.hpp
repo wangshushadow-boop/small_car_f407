@@ -19,6 +19,11 @@ enum class ControlMode : std::uint8_t {
   kVelocity = 1,
 };
 
+enum class ControlValueType : std::uint8_t {
+  kNormalized = 0,
+  kPhysicalVelocity = 1,
+};
+
 enum class AckResult : std::uint8_t {
   kOk = 0,
   kCrcError = 1,
@@ -31,6 +36,7 @@ struct ChassisStatus {
   std::uint32_t mcu_time_ms = 0;
   std::uint8_t source = 0;
   bool enabled = false;
+  std::uint8_t value_type = 0;
   std::int16_t forward = 0;
   std::int16_t turn = 0;
   std::int16_t ultra_mm = -1;

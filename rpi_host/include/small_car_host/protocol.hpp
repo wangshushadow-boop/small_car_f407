@@ -12,7 +12,7 @@
 namespace small_car {
 
 // 串口协议固定字段。协议版本和帧头必须和 MCU 侧 raspi_link.c 保持一致。
-constexpr std::uint8_t kProtocolVersion = 0x01;
+constexpr std::uint8_t kProtocolVersion = 0x02;
 constexpr std::uint8_t kSync0 = 0xAA;
 constexpr std::uint8_t kSync1 = 0x55;
 constexpr std::size_t kMaxPayloadSize = 64;
@@ -60,8 +60,8 @@ std::vector<std::uint8_t> MakeHeartbeatFrame(std::uint8_t seq,
 std::vector<std::uint8_t> MakeStopFrame(std::uint8_t seq,
                                         std::uint32_t host_time_ms = NowMs());
 std::vector<std::uint8_t> MakeDriveFrame(std::uint8_t seq,
-                                         std::int16_t forward,
-                                         std::int16_t turn,
+                                         std::int16_t linear_mm_s,
+                                         std::int16_t angular_mrad_s,
                                          std::uint32_t host_time_ms = NowMs());
 std::vector<std::uint8_t> MakeServoFrame(std::uint8_t seq,
                                          std::uint16_t left_us,
@@ -95,7 +95,8 @@ class PacketCodec {
   // PacketCodec 负责自动递增 seq，调用方只需要关心具体业务命令。
   std::vector<std::uint8_t> Heartbeat();
   std::vector<std::uint8_t> Stop();
-  std::vector<std::uint8_t> Drive(std::int16_t forward, std::int16_t turn);
+  std::vector<std::uint8_t> Drive(std::int16_t linear_mm_s,
+                                  std::int16_t angular_mrad_s);
   std::vector<std::uint8_t> Servo(std::uint16_t left_us, std::uint16_t right_us);
   std::vector<std::uint8_t> OdomReset();
   std::vector<std::uint8_t> ParamSet(std::uint8_t param_id, std::int32_t value);

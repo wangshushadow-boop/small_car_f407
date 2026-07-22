@@ -33,7 +33,7 @@ struct ParameterDefinition {
   std::int32_t max_value;
 };
 
-constexpr std::array<ParameterDefinition, 13> kParameterDefinitions = {{
+constexpr std::array<ParameterDefinition, 15> kParameterDefinitions = {{
     {1, "odom_mm_per_tick_num", 1000, 5000},
     {2, "gamepad_forward_start", 0, 1000},
     {3, "gamepad_reverse_start", 0, 1000},
@@ -47,6 +47,8 @@ constexpr std::array<ParameterDefinition, 13> kParameterDefinitions = {{
     {11, "attitude_gyro_weight_permille", 0, 1000},
     {12, "imu_roll_offset_mdeg", -30000, 30000},
     {13, "imu_pitch_offset_mdeg", -30000, 30000},
+    {14, "max_linear_speed_mm_s", 100, 3000},
+    {15, "max_angular_speed_mrad_s", 100, 10000},
 }};
 
 std::runtime_error ConfigError(const std::string& detail) {

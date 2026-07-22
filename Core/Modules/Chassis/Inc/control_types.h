@@ -15,14 +15,23 @@ typedef enum {
   CONTROL_SOURCE_SAFETY,
 } ControlSource;
 
+typedef enum {
+  /* 手柄使用的电机归一化输出，范围为 -1000 到 1000。 */
+  CONTROL_VALUE_NORMALIZED = 0,
+  /* ROS/上位机使用的物理速度：forward 为 mm/s，turn 为 mrad/s。 */
+  CONTROL_VALUE_PHYSICAL_VELOCITY = 1,
+} ControlValueType;
+
 typedef struct {
   /* 指令来源，方便调试时判断当前是谁在控制底盘。 */
   ControlSource source;
+  /* 指明 forward/turn 的单位，避免手柄输出与 ROS 物理速度混用。 */
+  ControlValueType value_type;
   /* false 表示本条指令不可执行，底盘层会停车。 */
   bool enabled;
-  /* 前进/后退速度，范围约定为 -1000 到 1000。 */
+  /* 前进量；具体单位由 value_type 指定。 */
   int16_t forward;
-  /* 左右转向量，范围约定为 -1000 到 1000。 */
+  /* 转向量；具体单位由 value_type 指定。 */
   int16_t turn;
 } ControlCommand;
 

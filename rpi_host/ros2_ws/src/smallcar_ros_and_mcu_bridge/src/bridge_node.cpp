@@ -103,14 +103,13 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   };
 
   void DeclareParameters() {
-    declare_parameter<std::string>("serial_port", "/dev/ttyACM0");
+    declare_parameter<std::string>("serial_port", "/dev/small_car_mcu");
     declare_parameter<int>("baud_rate", 115200);
     declare_parameter<std::string>("chassis_config", "");
     declare_parameter<double>("max_linear_speed_mps", 0.6);
     declare_parameter<double>("max_angular_speed_rad_s", 2.0);
     declare_parameter<int>("cmd_vel_timeout_ms", 500);
     declare_parameter<double>("command_rate_hz", 20.0);
-    declare_parameter<double>("turn_sign", 1.0);
     declare_parameter<std::string>("odom_frame", "odom");
     declare_parameter<std::string>("base_frame", "base_link");
     declare_parameter<std::string>("imu_frame", "imu_link");
@@ -154,7 +153,6 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     cmd_vel_timeout_ =
         std::chrono::milliseconds(get_parameter("cmd_vel_timeout_ms").as_int());
     command_rate_hz_ = get_parameter("command_rate_hz").as_double();
-    turn_sign_ = get_parameter("turn_sign").as_double();
     odom_frame_ = get_parameter("odom_frame").as_string();
     base_frame_ = get_parameter("base_frame").as_string();
     imu_frame_ = get_parameter("imu_frame").as_string();
@@ -255,17 +253,18 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   }
 
   void OnCmdVel(const geometry_msgs::msg::Twist::SharedPtr message) {
-    forward_command_ = ScaleCommand(message->linear.x, max_linear_speed_mps_);
-    turn_command_ =
-        ScaleCommand(message->angular.z * turn_sign_, max_angular_speed_rad_s_);
+    linear_command_mm_s_ = ToMilliUnits(message->linear.x, max_linear_speed_mps_);
+    angular_command_mrad_s_ =
+        ToMilliUnits(message->angular.z, max_angular_speed_rad_s_);
     last_cmd_vel_time_ = std::chrono::steady_clock::now();
     have_cmd_vel_ = true;
-    last_control_send_ok_ = client_.SendDrive(forward_command_, turn_command_);
+    last_control_send_ok_ =
+        client_.SendDrive(linear_command_mm_s_, angular_command_mrad_s_);
   }
 
-  static std::int16_t ScaleCommand(double value, double maximum) {
-    return static_cast<std::int16_t>(
-        std::lround(std::clamp(value / maximum, -1.0, 1.0) * 1000.0));
+  static std::int16_t ToMilliUnits(double value, double maximum) {
+    const double limited = std::clamp(value, -maximum, maximum);
+    return static_cast<std::int16_t>(std::lround(limited * 1000.0));
   }
 
   void MaintainCommand() {
@@ -276,7 +275,8 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
       last_control_send_ok_ = client_.SendStop();
       have_cmd_vel_ = false;
     } else {
-      last_control_send_ok_ = client_.SendDrive(forward_command_, turn_command_);
+      last_control_send_ok_ =
+          client_.SendDrive(linear_command_mm_s_, angular_command_mrad_s_);
     }
   }
 
@@ -508,8 +508,9 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
         DiagnosticValue("ultrasonic", value->ultra_ok ? "ready" : "timeout"),
         DiagnosticValue("error_code", std::to_string(value->error)),
         DiagnosticValue("mcu_time_ms", std::to_string(value->mcu_time_ms)),
-        DiagnosticValue("host_forward", std::to_string(forward_command_)),
-        DiagnosticValue("host_turn", std::to_string(turn_command_)),
+        DiagnosticValue("host_linear_mm_s", std::to_string(linear_command_mm_s_)),
+        DiagnosticValue("host_angular_mrad_s",
+                        std::to_string(angular_command_mrad_s_)),
         DiagnosticValue("serial_write", last_control_send_ok_ ? "ok" : "failed"),
     };
 
@@ -520,8 +521,11 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
       status.values.push_back(
           DiagnosticValue("control_enabled", chassis->enabled ? "true" : "false"));
       status.values.push_back(
-          DiagnosticValue("mcu_forward", std::to_string(chassis->forward)));
-      status.values.push_back(DiagnosticValue("mcu_turn", std::to_string(chassis->turn)));
+          DiagnosticValue("control_value_type", std::to_string(chassis->value_type)));
+      status.values.push_back(
+          DiagnosticValue("mcu_forward_value", std::to_string(chassis->forward)));
+      status.values.push_back(
+          DiagnosticValue("mcu_turn_value", std::to_string(chassis->turn)));
       status.values.push_back(
           DiagnosticValue("ultrasonic_mm", std::to_string(chassis->ultra_mm)));
     }
@@ -548,7 +552,6 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   double max_linear_speed_mps_ = 0.6;
   double max_angular_speed_rad_s_ = 2.0;
   double command_rate_hz_ = 20.0;
-  double turn_sign_ = 1.0;
   double wheel_radius_m_ = 0.0325;
   double ultra_min_m_ = 0.02;
   double ultra_max_m_ = 4.0;
@@ -567,8 +570,8 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   std::chrono::steady_clock::time_point last_cmd_vel_time_{};
   bool have_cmd_vel_ = false;
   bool last_control_send_ok_ = true;
-  std::int16_t forward_command_ = 0;
-  std::int16_t turn_command_ = 0;
+  std::int16_t linear_command_mm_s_ = 0;
+  std::int16_t angular_command_mrad_s_ = 0;
   ServoMapping left_servo_;
   ServoMapping right_servo_;
 

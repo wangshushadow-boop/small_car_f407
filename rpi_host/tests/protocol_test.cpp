@@ -19,6 +19,7 @@ std::vector<std::uint8_t> PayloadChassis() {
       0x64, 0x00, 0x00, 0x00,  // t=100
       0x02,                    // source=PAD
       0x01,                    // enabled=true
+      0x00,                    // normalized control value
       0x2C, 0x01,              // forward=300
       0xD8, 0xFF,              // turn=-40
       0x30, 0x02,              // ultra=560
@@ -84,6 +85,7 @@ void TestDecodeChassis() {
   Expect(status->mcu_time_ms == 100, "time mismatch");
   Expect(status->source == 2, "source mismatch");
   Expect(status->enabled, "enabled mismatch");
+  Expect(status->value_type == 0, "control value type mismatch");
   Expect(status->forward == 300, "forward mismatch");
   Expect(status->turn == -40, "turn mismatch");
   Expect(status->ultra_mm == 560, "ultra mismatch");
@@ -202,14 +204,16 @@ void TestDecodeParamValue() {
   Expect(param->value == 2410, "param value mismatch");
 }
 
-void TestDriveClamp() {
-  const auto raw = small_car::MakeDriveFrame(1, 2000, -2000, 1);
+void TestDrivePhysicalVelocity() {
+  const auto raw = small_car::MakeDriveFrame(1, 600, -2000, 1);
   small_car::FrameParser parser;
   const auto frames = parser.Feed(raw);
   Expect(frames.size() == 1, "drive frame parse failed");
   const auto& payload = frames[0].payload;
-  Expect(payload[6] == 0xE8 && payload[7] == 0x03, "forward clamp mismatch");
-  Expect(payload[8] == 0x18 && payload[9] == 0xFC, "turn clamp mismatch");
+  Expect(payload[6] == 0x58 && payload[7] == 0x02,
+         "linear velocity encoding mismatch");
+  Expect(payload[8] == 0x30 && payload[9] == 0xF8,
+         "angular velocity encoding mismatch");
 }
 
 }  // namespace
@@ -226,7 +230,7 @@ int main() {
     TestOdomResetFrame();
     TestParamSetGetFrame();
     TestDecodeParamValue();
-    TestDriveClamp();
+    TestDrivePhysicalVelocity();
   } catch (const std::exception& error) {
     std::cerr << error.what() << "\n";
     return 1;

@@ -59,6 +59,7 @@ bool ControlMux_SelectCommand(ControlCommand *command)
 
   /* 没有有效控制源时输出空闲命令，底盘层会停车。 */
   command->source = CONTROL_SOURCE_NONE;
+  command->value_type = CONTROL_VALUE_NORMALIZED;
   command->enabled = false;
   command->forward = 0;
   command->turn = 0;

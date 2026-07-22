@@ -18,6 +18,8 @@ typedef enum {
   CHASSIS_PARAM_ATTITUDE_GYRO_WEIGHT_PERMILLE = 11,
   CHASSIS_PARAM_IMU_ROLL_OFFSET_MDEG = 12,
   CHASSIS_PARAM_IMU_PITCH_OFFSET_MDEG = 13,
+  CHASSIS_PARAM_MAX_LINEAR_SPEED_MM_S = 14,
+  CHASSIS_PARAM_MAX_ANGULAR_SPEED_MRAD_S = 15,
 } ChassisParamId;
 
 typedef struct {
@@ -34,6 +36,8 @@ typedef struct {
   int16_t attitude_gyro_weight_permille;
   int16_t imu_roll_offset_mdeg;
   int16_t imu_pitch_offset_mdeg;
+  int16_t max_linear_speed_mm_s;
+  int16_t max_angular_speed_mrad_s;
 } ChassisParams;
 
 void ChassisParams_Init(void);

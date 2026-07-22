@@ -71,10 +71,6 @@ void RequirePayloadSize(const std::vector<std::uint8_t>& payload, std::size_t si
   }
 }
 
-std::int16_t ClampControl(std::int16_t value) {
-  return std::clamp<std::int16_t>(value, -1000, 1000);
-}
-
 // 串口流中可能出现半包或噪声。若最后一个字节正好是帧头首字节 AA，
 // 需要保留下来，等待下一次 Feed() 拼成 AA 55。
 void DropNoise(std::vector<std::uint8_t>* buffer) {
@@ -156,15 +152,15 @@ std::vector<std::uint8_t> MakeStopFrame(std::uint8_t seq, std::uint32_t host_tim
 }
 
 std::vector<std::uint8_t> MakeDriveFrame(std::uint8_t seq,
-                                         std::int16_t forward,
-                                         std::int16_t turn,
+                                         std::int16_t linear_mm_s,
+                                         std::int16_t angular_mrad_s,
                                          std::uint32_t host_time_ms) {
   std::vector<std::uint8_t> payload;
   PutU32(&payload, host_time_ms);
   payload.push_back(static_cast<std::uint8_t>(ControlMode::kVelocity));
   payload.push_back(1);
-  PutI16(&payload, ClampControl(forward));
-  PutI16(&payload, ClampControl(turn));
+  PutI16(&payload, linear_mm_s);
+  PutI16(&payload, angular_mrad_s);
   return EncodeFrame(static_cast<std::uint8_t>(Msg::kControl), seq, payload);
 }
 
@@ -214,14 +210,15 @@ std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
   // 这里只解析 MCU 会上传给树莓派的消息；树莓派下发的命令不需要反向解析。
   switch (static_cast<Msg>(frame.msg)) {
     case Msg::kChassisStatus: {
-      RequirePayloadSize(payload, 12);
+      RequirePayloadSize(payload, 13);
       return ChassisStatus{
           ReadU32(payload, 0),
           payload[4],
           payload[5] != 0,
-          ReadI16(payload, 6),
-          ReadI16(payload, 8),
-          ReadI16(payload, 10),
+          payload[6],
+          ReadI16(payload, 7),
+          ReadI16(payload, 9),
+          ReadI16(payload, 11),
       };
     }
     case Msg::kEncoderDelta: {
@@ -378,8 +375,9 @@ std::vector<std::uint8_t> PacketCodec::Stop() {
   return MakeStopFrame(NextSeq());
 }
 
-std::vector<std::uint8_t> PacketCodec::Drive(std::int16_t forward, std::int16_t turn) {
-  return MakeDriveFrame(NextSeq(), forward, turn);
+std::vector<std::uint8_t> PacketCodec::Drive(std::int16_t linear_mm_s,
+                                             std::int16_t angular_mrad_s) {
+  return MakeDriveFrame(NextSeq(), linear_mm_s, angular_mrad_s);
 }
 
 std::vector<std::uint8_t> PacketCodec::Servo(std::uint16_t left_us,

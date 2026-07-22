@@ -19,7 +19,7 @@
 
 #define RASPI_FRAME_SYNC_0 0xAAU
 #define RASPI_FRAME_SYNC_1 0x55U
-#define RASPI_FRAME_VERSION 0x01U
+#define RASPI_FRAME_VERSION 0x02U
 #define RASPI_PAYLOAD_MAX_SIZE 64U
 #define RASPI_RX_RING_SIZE 256U
 #define RASPI_RX_BUDGET 96U
@@ -93,7 +93,6 @@ static void HandleParamCommand(uint8_t seq, const uint8_t *payload, uint8_t leng
 static void SendFrame(uint8_t msg, const uint8_t *payload, uint8_t length);
 static void SendAck(uint8_t ack_msg, uint8_t ack_seq, uint8_t result);
 static uint16_t Crc16CcittFalse(const uint8_t *data, uint16_t length);
-static int16_t ClampControlValue(int16_t value);
 static uint16_t ReadU16Le(const uint8_t *data);
 static int16_t ReadI16Le(const uint8_t *data);
 static void WriteU16Le(uint8_t *data, uint16_t value);
@@ -153,13 +152,14 @@ void RaspiLink_SendChassisStatus(const ControlCommand *command, int16_t ultra_mm
     return;
   }
 
-  uint8_t payload[12] = {0};
+  uint8_t payload[13] = {0};
   WriteU32Le(&payload[0], HAL_GetTick());
   payload[4] = (uint8_t)command->source;
   payload[5] = command->enabled ? 1U : 0U;
-  WriteI16Le(&payload[6], command->forward);
-  WriteI16Le(&payload[8], command->turn);
-  WriteI16Le(&payload[10], ultra_mm);
+  payload[6] = (uint8_t)command->value_type;
+  WriteI16Le(&payload[7], command->forward);
+  WriteI16Le(&payload[9], command->turn);
+  WriteI16Le(&payload[11], ultra_mm);
   SendFrame(RASPI_MSG_CHASSIS_STATUS, payload, sizeof(payload));
 }
 
@@ -437,6 +437,7 @@ static void HandleControlCommand(uint8_t seq, const uint8_t *payload, uint8_t le
   uint8_t enable = payload[5];
 
   g_host_command.source = CONTROL_SOURCE_HOST;
+  g_host_command.value_type = CONTROL_VALUE_PHYSICAL_VELOCITY;
   g_host_command.enabled = false;
   g_host_command.forward = 0;
   g_host_command.turn = 0;
@@ -448,8 +449,9 @@ static void HandleControlCommand(uint8_t seq, const uint8_t *payload, uint8_t le
   else if (mode == RASPI_MODE_VELOCITY)
   {
     g_host_command.enabled = true;
-    g_host_command.forward = ClampControlValue(ReadI16Le(&payload[6]));
-    g_host_command.turn = ClampControlValue(ReadI16Le(&payload[8]));
+    /* 协议 v2 直接传输 ROS 物理速度：mm/s 和 mrad/s。 */
+    g_host_command.forward = ReadI16Le(&payload[6]);
+    g_host_command.turn = ReadI16Le(&payload[8]);
   }
   else
   {
@@ -593,19 +595,6 @@ static uint16_t Crc16CcittFalse(const uint8_t *data, uint16_t length)
     }
   }
   return crc;
-}
-
-static int16_t ClampControlValue(int16_t value)
-{
-  if (value > 1000)
-  {
-    return 1000;
-  }
-  if (value < -1000)
-  {
-    return -1000;
-  }
-  return value;
 }
 
 static uint16_t ReadU16Le(const uint8_t *data)

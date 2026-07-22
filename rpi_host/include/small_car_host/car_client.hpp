@@ -20,7 +20,7 @@ class CarClient {
 
   bool SendHeartbeat();
   bool SendStop();
-  bool SendDrive(std::int16_t forward, std::int16_t turn);
+  bool SendDrive(std::int16_t linear_mm_s, std::int16_t angular_mrad_s);
   bool SendServo(std::uint16_t left_us, std::uint16_t right_us);
   bool SendOdomReset();
   bool SendParamSet(std::uint8_t param_id, std::int32_t value);

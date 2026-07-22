@@ -58,13 +58,15 @@ void Chassis_ApplyCommand(const ControlCommand *command)
     return;
   }
 
-  if (command->source == CONTROL_SOURCE_GAMEPAD)
+  if ((command->source == CONTROL_SOURCE_GAMEPAD) &&
+      (command->value_type == CONTROL_VALUE_NORMALIZED))
   {
     Chassis_SetManualVelocity(command->forward, command->turn);
     return;
   }
 
-  if (command->source == CONTROL_SOURCE_HOST)
+  if ((command->source == CONTROL_SOURCE_HOST) &&
+      (command->value_type == CONTROL_VALUE_PHYSICAL_VELOCITY))
   {
     Chassis_SetAutoVelocity(command->forward, command->turn);
     return;

@@ -24,7 +24,7 @@ void PrintUsage() {
       << "  small_car_host_cli --port /dev/ttyACM0 monitor [--heartbeat-ms 1000]\n"
       << "  small_car_host_cli --port /dev/ttyACM0 heartbeat\n"
       << "  small_car_host_cli --port /dev/ttyACM0 stop\n"
-      << "  small_car_host_cli --port /dev/ttyACM0 drive <forward> <turn>\n"
+      << "  small_car_host_cli --port /dev/ttyACM0 drive <linear_mm_s> <angular_mrad_s>\n"
       << "  small_car_host_cli --port /dev/ttyACM0 servo <left_us> <right_us>\n"
       << "  small_car_host_cli --port /dev/ttyACM0 odom-reset\n";
 }
@@ -90,6 +90,7 @@ void PrintStatus(const small_car::CarClient& client) {
     std::cout << "[CHASSIS] t=" << status->mcu_time_ms
               << " src=" << static_cast<int>(status->source)
               << " en=" << status->enabled
+              << " type=" << static_cast<int>(status->value_type)
               << " f=" << status->forward
               << " turn=" << status->turn
               << " ultra=" << status->ultra_mm << "\n";

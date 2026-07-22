@@ -31,9 +31,8 @@ bool CarClient::SendStop() {
   return SendBytes(codec_.Stop());
 }
 
-bool CarClient::SendDrive(std::int16_t forward, std::int16_t turn) {
-  // forward/turn 的范围由协议层限制到 [-1000, 1000]，调用层不必重复裁剪。
-  return SendBytes(codec_.Drive(forward, turn));
+bool CarClient::SendDrive(std::int16_t linear_mm_s, std::int16_t angular_mrad_s) {
+  return SendBytes(codec_.Drive(linear_mm_s, angular_mrad_s));
 }
 
 bool CarClient::SendServo(std::uint16_t left_us, std::uint16_t right_us) {

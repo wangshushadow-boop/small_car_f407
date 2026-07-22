@@ -7,7 +7,7 @@ services:
     network_mode: host
     ipc: host
     devices:
-      - /dev/ttyACM0:/dev/ttyACM0
+      - /dev/serial/by-id/usb-1a86_USB_Single_Serial_5C2C059301-if00:/dev/small_car_mcu
     volumes:
       - ..:/workspace/rpi_host
     working_dir: /workspace/rpi_host/ros2_ws

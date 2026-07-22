@@ -103,7 +103,7 @@ ROS2 相关参数：
 | `rpi_host/ros2_ws/src/smallcar_ros_and_mcu_bridge/config/bridge.yaml` | 串口、坐标系、速度上限、舵机映射和传感器属性。 |
 | `rpi_host/ros2_ws/src/small_car_description/urdf/robot_geometry.xacro` | IMU、超声、相机、树莓派、MCU 等硬件安装坐标。 |
 
-`/cmd_vel` 当前按配置的最大线速度和角速度线性换算为 MCU 的 `[-1000, 1000]` 控制量。电机闭环速度控制完成前，消息单位符合 ROS2 约定，但实际速度精度仍取决于底盘标定、负载和地面摩擦。
+`/cmd_vel` 使用 ROS2 标准单位。bridge 将线速度转换为 `mm/s`、角速度转换为 `mrad/s` 后通过协议 v2 下发；MCU 当前仍按标定上限换算为开环电机输出。电机闭环完成前，实际速度精度仍取决于负载、电量和地面摩擦。
 
 ## 参数调试
 
@@ -129,7 +129,7 @@ docker compose logs -f
 看到类似输出表示成功：
 
 ```text
-applied and verified 13 chassis parameters
+applied and verified 15 chassis parameters
 ```
 
 ## 独立串口工具

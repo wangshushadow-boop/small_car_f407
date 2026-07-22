@@ -41,3 +41,9 @@ small_car:
 
     # 参数 ID 13：IMU 安装俯仰偏置，单位 mdeg；平地静止标定后填写。
     imu_pitch_offset_mdeg: 990
+
+    # 参数 ID 14：ROS 前进速度上限，单位 mm/s；当前已验证为 0.6 m/s。
+    max_linear_speed_mm_s: 600
+
+    # 参数 ID 15：ROS 转向角速度上限，单位 mrad/s；对应 2.0 rad/s。
+    max_angular_speed_mrad_s: 2000
