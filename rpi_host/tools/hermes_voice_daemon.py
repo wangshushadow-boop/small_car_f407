@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import wave
 from collections import deque
@@ -19,9 +20,6 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
-
-from tools.transcription_tools import transcribe_audio
-from tools.tts_tool import text_to_speech_tool
 
 
 LOG = logging.getLogger("hermes-car-voice")
@@ -66,6 +64,9 @@ CAMERA_IMAGE = Path(
     )
 )
 HERMES_BIN = os.getenv("HERMES_BIN", "/home/ubuntu/.hermes/venv/bin/hermes")
+HERMES_PYTHON = os.getenv(
+    "HERMES_PYTHON", "/home/ubuntu/.hermes/venv/bin/python"
+)
 RUN_DIR = Path(os.getenv("CAR_VOICE_RUN_DIR", "/home/ubuntu/.hermes/run/car-voice"))
 WAKE_STT_MODEL = os.getenv(
     "CAR_VOICE_WAKE_STT_MODEL",
@@ -77,6 +78,24 @@ WAKE_ON_ANY_SPEECH = os.getenv(
 INTENT_LLM_ENABLED = os.getenv(
     "CAR_VOICE_INTENT_LLM_ENABLED", "true"
 ).lower() in {"1", "true", "yes", "on"}
+
+# 语音运动只接受固定动作，不允许大模型直接生成速度值。
+MOTION_FORWARD_SPEED_MPS = min(
+    0.6, max(0.0, float(os.getenv("CAR_VOICE_FORWARD_SPEED_MPS", "0.36")))
+)
+MOTION_REVERSE_SPEED_MPS = min(
+    0.6, max(0.0, float(os.getenv("CAR_VOICE_REVERSE_SPEED_MPS", "0.25")))
+)
+MOTION_ANGULAR_SPEED_RAD_S = min(
+    2.0,
+    max(0.0, float(os.getenv("CAR_VOICE_ANGULAR_SPEED_RAD_S", "1.5"))),
+)
+MOTION_DURATION_SECONDS = min(
+    3.0, max(0.1, float(os.getenv("CAR_VOICE_MOTION_DURATION_SECONDS", "1.0")))
+)
+MOTION_RATE_HZ = min(
+    50.0, max(10.0, float(os.getenv("CAR_VOICE_MOTION_RATE_HZ", "20")))
+)
 
 WAKE_PHRASES = tuple(
     phrase.strip()
@@ -110,6 +129,7 @@ SUPPORTED_INTENTS = {
     "conversation.exit",
     "music.play",
     "music.stop",
+    "motion.command",
     "volume.adjust",
     "navigation.request",
     "unknown",
@@ -122,6 +142,98 @@ class IntentResult:
   confidence: float
   slots: dict[str, object]
   source: str
+
+
+class RosMotionPublisher:
+  """在独立线程中持续发布限时速度命令，并在超时或退出时停车。"""
+
+  def __init__(self) -> None:
+    import rclpy
+    from geometry_msgs.msg import Twist
+
+    self._rclpy = rclpy
+    self._twist_type = Twist
+    self._rclpy.init(args=None)
+    self._node = self._rclpy.create_node("hermes_voice_motion")
+    self._publisher = self._node.create_publisher(Twist, "/cmd_vel", 10)
+    self._condition = threading.Condition()
+    self._linear = 0.0
+    self._angular = 0.0
+    self._deadline = 0.0
+    self._shutdown = False
+    self._thread = threading.Thread(
+        target=self._publish_loop, name="voice-motion", daemon=True
+    )
+    self._thread.start()
+
+  def start(self, linear: float, angular: float) -> None:
+    """启动一个有时间上限的运动；新命令会覆盖尚未结束的旧命令。"""
+    with self._condition:
+      self._linear = linear
+      self._angular = angular
+      self._deadline = time.monotonic() + MOTION_DURATION_SECONDS
+      self._condition.notify_all()
+    LOG.info(
+        "Motion start: linear=%.3f m/s, angular=%.3f rad/s, duration=%.1f s",
+        linear,
+        angular,
+        MOTION_DURATION_SECONDS,
+    )
+
+  def stop(self) -> None:
+    """立即清除当前动作并发送零速度。"""
+    with self._condition:
+      self._linear = 0.0
+      self._angular = 0.0
+      self._deadline = 0.0
+      # 在同一把锁内发布停车命令，确保后台线程不会在其后补发旧速度。
+      self._publish(0.0, 0.0)
+      self._condition.notify_all()
+    LOG.info("Motion stopped")
+
+  def close(self) -> None:
+    """停车并释放 ROS2 节点。"""
+    self.stop()
+    with self._condition:
+      self._shutdown = True
+      self._condition.notify_all()
+    self._thread.join(timeout=2.0)
+    self._node.destroy_node()
+    if self._rclpy.ok():
+      self._rclpy.shutdown()
+
+  def _publish(self, linear: float, angular: float) -> None:
+    message = self._twist_type()
+    message.linear.x = linear
+    message.angular.z = angular
+    self._publisher.publish(message)
+
+  def _publish_loop(self) -> None:
+    period = 1.0 / MOTION_RATE_HZ
+    was_active = False
+    while True:
+      with self._condition:
+        if self._shutdown:
+          return
+        now = time.monotonic()
+        active = self._deadline > now
+        linear = self._linear if active else 0.0
+        angular = self._angular if active else 0.0
+        if not active and was_active:
+          self._linear = 0.0
+          self._angular = 0.0
+          self._deadline = 0.0
+        if active or was_active:
+          self._publish(linear, angular)
+      if was_active and not active:
+        LOG.info("Motion duration reached; stop command sent")
+      was_active = active
+      self._rclpy.spin_once(self._node, timeout_sec=0.0)
+      with self._condition:
+        self._condition.wait(timeout=period)
+
+
+MOTION_PUBLISHER: RosMotionPublisher | None = None
 
 
 def request_stop(_signum: int, _frame: object) -> None:
@@ -167,7 +279,10 @@ def is_vision_request(text: str) -> bool:
   distance_request = any(term in normalized for term in ("多远", "距离")) and any(
       term in normalized for term in ("这", "那", "前面", "眼前")
   )
-  return (has_action and has_target) or distance_request
+  directional_look = any(term in normalized for term in ("向前", "往前")) and any(
+      term in normalized for term in visual_actions
+  )
+  return (has_action and has_target) or distance_request or directional_look
 
 
 def match_local_intent(text: str) -> IntentResult | None:
@@ -176,10 +291,45 @@ def match_local_intent(text: str) -> IntentResult | None:
 
   if contains_phrase(text, EXIT_PHRASES):
     return IntentResult("conversation.exit", 1.0, {}, "local_rule")
+
+  # 停车优先于其他运动；“停止音乐”仍交给后面的音乐规则处理。
+  motion_stop_phrases = {"停止", "停车", "停下", "别动", "不要动", "小车停止"}
+  if normalized in motion_stop_phrases:
+    return IntentResult(
+        "motion.command", 1.0, {"action": "stop"}, "local_rule"
+    )
+
+  # “向前看”等视觉请求不能被“向前”运动规则抢先匹配。
   if is_vision_request(text):
     return IntentResult(
         "camera.inspect", 1.0, {"question": text}, "local_rule"
     )
+
+  # 基础运动只接受无目的地的短动作；带地点的语句交给导航意图处理。
+  navigation_targets = (
+      "桌子",
+      "门口",
+      "厨房",
+      "客厅",
+      "卧室",
+      "旁边",
+      "那里",
+      "那边",
+      "位置",
+      "目的地",
+  )
+  motion_phrases = (
+      ("backward", ("后退", "倒退", "向后", "往后")),
+      ("left", ("左转", "向左转", "往左转")),
+      ("right", ("右转", "向右转", "往右转")),
+      ("forward", ("前进", "向前", "往前")),
+  )
+  if not any(target in normalized for target in navigation_targets):
+    for action, phrases in motion_phrases:
+      if any(phrase in normalized for phrase in phrases):
+        return IntentResult(
+            "motion.command", 1.0, {"action": action}, "local_rule"
+        )
 
   music_words = ("音乐", "歌曲", "歌", "萱草花", "播放")
   if any(word in normalized for word in music_words):
@@ -230,6 +380,11 @@ def looks_like_action_request(text: str) -> bool:
       "音量",
       "停止",
       "暂停",
+      "前进",
+      "后退",
+      "左转",
+      "右转",
+      "停车",
       "导航",
       "前往",
       "移动",
@@ -369,9 +524,26 @@ def transcribe(path: Path, model: str | None = None) -> str:
       LOG.error("SenseVoice failed: %s", error)
       return ""
 
-  result = transcribe_audio(str(path), model=model)
-  if not result.get("success"):
-    LOG.error("STT failed: %s", result.get("error", "unknown error"))
+  helper = (
+      "import json,sys; "
+      "from tools.transcription_tools import transcribe_audio; "
+      "model=sys.argv[2] or None; "
+      "print(json.dumps(transcribe_audio(sys.argv[1], model=model)))"
+  )
+  try:
+    completed = subprocess.run(
+        [HERMES_PYTHON, "-c", helper, str(path), model or ""],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    result = json.loads(completed.stdout)
+  except (json.JSONDecodeError, OSError, subprocess.SubprocessError) as error:
+    LOG.error("STT failed: %s", error)
+    return ""
+  if completed.returncode != 0 or not result.get("success"):
+    LOG.error("STT failed: %s", result.get("error", completed.stderr.strip()))
     return ""
   text = str(result.get("transcript", "")).strip()
   LOG.info("Transcript: %s", text or "<empty>")
@@ -415,7 +587,8 @@ def classify_intent_with_llm(text: str) -> IntentResult | None:
       "你是智能小车的意图分类器，只能输出单行 JSON，不要解释。"
       "格式：{\"intent\":\"...\",\"confidence\":0.0,\"slots\":{}}。"
       "intent 只能是 camera.inspect、conversation.chat、conversation.exit、"
-      "music.play、music.stop、volume.adjust、navigation.request、unknown。"
+      "music.play、music.stop、volume.adjust、"
+      "navigation.request、unknown。"
       "camera.inspect 表示需要观察相机画面、拍照、判断眼前物体或距离；"
       "navigation.request 表示要求小车移动到某处；其余按名称判断。"
       "slots 中只提取用户明确说出的参数，不执行任何动作。\n"
@@ -548,32 +721,28 @@ def ask_hermes(
 def speak(text: str) -> None:
   RUN_DIR.mkdir(parents=True, exist_ok=True)
   mp3_path = RUN_DIR / "reply.mp3"
-  wav_path = RUN_DIR / "reply.wav"
   try:
-    result = json.loads(text_to_speech_tool(text, str(mp3_path)))
+    helper = (
+        "import sys; from tools.tts_tool import text_to_speech_tool; "
+        "print(text_to_speech_tool(sys.argv[1], sys.argv[2]))"
+    )
+    completed = subprocess.run(
+        [HERMES_PYTHON, "-c", helper, text, str(mp3_path)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    result = json.loads(completed.stdout)
+    if completed.returncode != 0:
+      raise RuntimeError(completed.stderr.strip() or "TTS process failed")
     if not result.get("success"):
       raise RuntimeError(result.get("error", "TTS failed"))
+    # mpg123 直接解码并输出 MP3，避免为一段提示音引入完整 FFmpeg。
     subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
-            str(mp3_path),
-            "-ar",
-            str(PLAYBACK_SAMPLE_RATE),
-            "-ac",
-            "2",
-            str(wav_path),
-        ],
+        ["mpg123", "-q", "-a", PLAYBACK_DEVICE, str(mp3_path)],
         check=True,
-        timeout=60,
-    )
-    subprocess.run(
-        ["aplay", "-q", "-D", PLAYBACK_DEVICE, str(wav_path)],
-        check=True,
+        env={**os.environ, "HOME": str(RUN_DIR)},
         timeout=60,
     )
   except (json.JSONDecodeError, OSError, RuntimeError, subprocess.SubprocessError) as error:
@@ -614,8 +783,33 @@ def process_user_turn(
   if intent.name == "volume.adjust":
     speak("我识别到音量调节请求了，但语音音量控制还没有接入。")
     return session_id, False
+  if intent.name == "motion.command":
+    if MOTION_PUBLISHER is None:
+      speak("运动控制暂时不可用。")
+      return session_id, False
+    if intent.source != "local_rule":
+      speak("运动指令没有通过本地安全规则。")
+      return session_id, False
+    action = str(intent.slots.get("action", "stop"))
+    commands = {
+        "forward": (MOTION_FORWARD_SPEED_MPS, 0.0, "好的，前进。"),
+        "backward": (-MOTION_REVERSE_SPEED_MPS, 0.0, "好的，后退。"),
+        "left": (0.0, MOTION_ANGULAR_SPEED_RAD_S, "好的，左转。"),
+        "right": (0.0, -MOTION_ANGULAR_SPEED_RAD_S, "好的，右转。"),
+    }
+    if action == "stop":
+      MOTION_PUBLISHER.stop()
+      speak("已停车。")
+      return session_id, False
+    command = commands.get(action)
+    if command is None:
+      speak("这个运动指令还不支持。")
+      return session_id, False
+    MOTION_PUBLISHER.start(command[0], command[1])
+    speak(command[2])
+    return session_id, False
   if intent.name == "navigation.request":
-    speak("我识别到小车移动请求了，但当前阶段还不能控制小车运动。")
+    speak("目前只支持前进、后退、左转、右转和停止。")
     return session_id, False
 
   response, session_id = ask_hermes(text, session_id)
@@ -662,6 +856,7 @@ def conversation_loop(
 
 
 def main() -> int:
+  global MOTION_PUBLISHER
   logging.basicConfig(
       level=os.getenv("CAR_VOICE_LOG_LEVEL", "INFO"),
       format="%(asctime)s %(levelname)s %(message)s",
@@ -669,6 +864,12 @@ def main() -> int:
   signal.signal(signal.SIGTERM, request_stop)
   signal.signal(signal.SIGINT, request_stop)
   RUN_DIR.mkdir(parents=True, exist_ok=True)
+
+  try:
+    MOTION_PUBLISHER = RosMotionPublisher()
+  except (ImportError, RuntimeError) as error:
+    LOG.error("ROS2 motion publisher init failed: %s", error)
+    return 1
 
   LOG.info(
       "Voice daemon ready: input=%s at %s Hz, playback=%s at %s Hz, "
@@ -683,30 +884,38 @@ def main() -> int:
       ",".join(WAKE_PHRASES),
       WAKE_ON_ANY_SPEECH,
   )
-  while not STOP_REQUESTED:
-    try:
-      path = record_utterance(3600)
-      if path is None:
-        continue
-      text = transcribe(path, WAKE_STT_MODEL)
-      path.unlink(missing_ok=True)
-      phrase_matched = contains_phrase(text, WAKE_PHRASES)
-      if phrase_matched or (WAKE_ON_ANY_SPEECH and bool(text)):
-        LOG.info(
-            "Wake accepted (%s)",
-            "phrase" if phrase_matched else "debug any-speech mode",
-        )
-        wake_image = capture_camera()
-        initial_intent = route_intent(text)
-        if initial_intent.name != "conversation.chat":
-          conversation_loop(text, wake_image, initial_intent)
-        else:
-          conversation_loop()
-      elif text:
-        LOG.info("Wake phrase not found")
-    except Exception:
-      LOG.exception("Voice loop error; retrying")
-      time.sleep(2)
+  try:
+    while not STOP_REQUESTED:
+      try:
+        path = record_utterance(3600)
+        if path is None:
+          continue
+        text = transcribe(path, WAKE_STT_MODEL)
+        path.unlink(missing_ok=True)
+        phrase_matched = contains_phrase(text, WAKE_PHRASES)
+        if phrase_matched or (WAKE_ON_ANY_SPEECH and bool(text)):
+          LOG.info(
+              "Wake accepted (%s)",
+              "phrase" if phrase_matched else "debug any-speech mode",
+          )
+          initial_intent = route_intent(text)
+          if initial_intent.name != "conversation.chat":
+            wake_image = (
+                capture_camera()
+                if initial_intent.name == "camera.inspect"
+                else None
+            )
+            conversation_loop(text, wake_image, initial_intent)
+          else:
+            conversation_loop()
+        elif text:
+          LOG.info("Wake phrase not found")
+      except Exception:
+        LOG.exception("Voice loop error; retrying")
+        time.sleep(2)
+  finally:
+    MOTION_PUBLISHER.close()
+    MOTION_PUBLISHER = None
 
   LOG.info("Voice daemon stopped")
   return 0

@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -26,6 +26,15 @@ def generate_launch_description():
             name="smallcar_ros_and_mcu_bridge",
             output="screen",
             parameters=[bridge_config, {"chassis_config": chassis_config}],
+        ),
+        ExecuteProcess(
+            cmd=[
+                "python3",
+                "/workspace/rpi_host/tools/hermes_voice_daemon.py",
+            ],
+            output="screen",
+            respawn=True,
+            respawn_delay=3.0,
         ),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(description_launch)),
     ])

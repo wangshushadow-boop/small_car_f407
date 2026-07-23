@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -110,6 +111,9 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     declare_parameter<double>("max_angular_speed_rad_s", 2.0);
     declare_parameter<int>("cmd_vel_timeout_ms", 500);
     declare_parameter<double>("command_rate_hz", 20.0);
+    declare_parameter<std::string>(
+        "mcu_recovery_request",
+        "/workspace/rpi_host/runtime/mcu_recovery.request");
     declare_parameter<std::string>("odom_frame", "odom");
     declare_parameter<std::string>("base_frame", "base_link");
     declare_parameter<std::string>("imu_frame", "imu_link");
@@ -153,6 +157,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     cmd_vel_timeout_ =
         std::chrono::milliseconds(get_parameter("cmd_vel_timeout_ms").as_int());
     command_rate_hz_ = get_parameter("command_rate_hz").as_double();
+    mcu_recovery_request_ = get_parameter("mcu_recovery_request").as_string();
     odom_frame_ = get_parameter("odom_frame").as_string();
     base_frame_ = get_parameter("base_frame").as_string();
     imu_frame_ = get_parameter("imu_frame").as_string();
@@ -260,6 +265,9 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     have_cmd_vel_ = true;
     last_control_send_ok_ =
         client_.SendDrive(linear_command_mm_s_, angular_command_mrad_s_);
+    if (!last_control_send_ok_) {
+      RequestMcuRecovery();
+    }
   }
 
   static std::int16_t ToMilliUnits(double value, double maximum) {
@@ -268,16 +276,49 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   }
 
   void MaintainCommand() {
+    const auto now = std::chrono::steady_clock::now();
     if (!have_cmd_vel_) {
-      last_control_send_ok_ = client_.SendHeartbeat();
-    } else if (std::chrono::steady_clock::now() - last_cmd_vel_time_ >
-               cmd_vel_timeout_) {
+      /*
+       * 空闲心跳只需维持链路诊断，不需要跟随 20 Hz 控制定时器发送。
+       * 降低小包频率可避免 CH9102 经 USB Hub 长时间写入时触发 xHCI 端点异常。
+       */
+      if (now - last_heartbeat_time_ >= idle_heartbeat_interval_) {
+        last_control_send_ok_ = client_.SendHeartbeat();
+        last_heartbeat_time_ = now;
+      }
+    } else if (now - last_cmd_vel_time_ > cmd_vel_timeout_) {
       last_control_send_ok_ = client_.SendStop();
       have_cmd_vel_ = false;
+      last_heartbeat_time_ = now;
     } else {
       last_control_send_ok_ =
           client_.SendDrive(linear_command_mm_s_, angular_command_mrad_s_);
+      if (!last_control_send_ok_) {
+        RequestMcuRecovery();
+      }
     }
+  }
+
+  void RequestMcuRecovery() {
+    /*
+     * 容器没有复位宿主机 USB 的权限。这里只写入一个请求文件，由宿主机
+     * systemd.path 触发恢复脚本，避免给 ROS2 容器开放 Docker 或 sysfs 权限。
+     */
+    const auto now = std::chrono::steady_clock::now();
+    if (mcu_recovery_request_.empty() ||
+        now - last_recovery_request_time_ < recovery_request_cooldown_) {
+      return;
+    }
+
+    std::ofstream request(mcu_recovery_request_, std::ios::trunc);
+    if (!request) {
+      RCLCPP_ERROR(get_logger(), "cannot create MCU recovery request: %s",
+                   mcu_recovery_request_.c_str());
+      return;
+    }
+    request << "cmd_vel serial write failed\n";
+    last_recovery_request_time_ = now;
+    RCLCPP_ERROR(get_logger(), "MCU link failed; USB recovery requested");
   }
 
   void OnServoTrajectory(
@@ -567,7 +608,12 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   double right_wheel_position_rad_ = 0.0;
   bool publish_tf_ = true;
   std::chrono::milliseconds cmd_vel_timeout_{500};
+  std::chrono::milliseconds idle_heartbeat_interval_{1000};
+  std::chrono::seconds recovery_request_cooldown_{30};
   std::chrono::steady_clock::time_point last_cmd_vel_time_{};
+  std::chrono::steady_clock::time_point last_heartbeat_time_{};
+  std::chrono::steady_clock::time_point last_recovery_request_time_{};
+  std::string mcu_recovery_request_;
   bool have_cmd_vel_ = false;
   bool last_control_send_ok_ = true;
   std::int16_t linear_command_mm_s_ = 0;

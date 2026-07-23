@@ -23,6 +23,7 @@ ubuntu@192.168.3.85
 | 3 | 替换树莓派上的源码目录。 |
 | 4 | 重新构建 C++ 工具并运行协议测试。 |
 | 5 | 重建并强制重启 ROS2 bridge 容器。 |
+| 6 | 在同一容器中启动 Hermes 语音控制，并停用旧宿主机语音服务。 |
 
 YAML 参数会在 bridge 重启后重新读取并下发到 MCU。
 
@@ -117,17 +118,12 @@ ROS2 相关参数：
 Windows 和树莓派连接同一局域网后，在 WSL 中执行：
 
 ```bash
-source /opt/ros/kilted/setup.bash
-export ROS_DOMAIN_ID=0
-export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
-export FASTDDS_DEFAULT_PROFILES_FILE=/mnt/d/stm32/demo/small_car_f407/rpi_host/config/fastdds_wsl.xml
-
-ros2 daemon stop
-pkill -f _ros2_daemon || true
-ros2 daemon start
+bash /mnt/d/stm32/demo/small_car_f407/scripts/setup_wsl_ros_env.sh
 ```
 
-`fastdds_wsl.xml` 将 Fast DDS 固定到 PC 局域网地址，避免 WSL mirrored 网络向树莓派通告不可访问的虚拟接口。PC 地址变化后，需要同步修改该文件中的地址。
+脚本不修改 `~/.bashrc`，而是进入一个已经配置好的 ROS2 终端；输入 `exit` 可返回原终端。`fastdds_wsl.xml` 将 Fast DDS 固定到 PC 局域网地址；PC 地址变化后，需要同步修改该文件中的地址。
+
+若 WSL 中执行 `ip -4 -brief address` 只显示 `lo`，请在 PowerShell 中执行 `wsl --shutdown`，然后重新进入 WSL。
 
 确认树莓派 bridge 已被发现：
 
@@ -138,6 +134,27 @@ ros2 topic info /cmd_vel --verbose
 输出中的 `Subscription count` 应为 `1`。Fast DDS 跨 WSL 时节点名可能显示为 `NODE_NAME_UNKNOWN`，不影响话题收发。
 
 当前开环映射中，`2.0 rad/s` 对应电机输出 `1000`。实测转向起步输出约为 `620`，因此角速度通常需要达到约 `1.24 rad/s` 才能克服静摩擦；后续接入轮速闭环后再消除该限制。
+
+## Hermes 语音控制
+
+语音程序和 ROS2 bridge 由同一容器管理。语音程序只把本地规则明确识别出的动作发布到 `/cmd_vel`，不会执行大模型生成的速度值。
+
+| 语音 | 动作 |
+| --- | --- |
+| “小车前进” | 以 `0.55 m/s` 前进 1.5 秒后停车。 |
+| “小车后退” | 以 `0.45 m/s` 后退 1.5 秒后停车。 |
+| “小车左转” | 以 `1.8 rad/s` 左转 1.5 秒后停车。 |
+| “小车右转” | 以 `1.8 rad/s` 右转 1.5 秒后停车。 |
+| “小车停止”（对话中也可说“停止”或“停车”） | 立即发送零速度。 |
+
+查看语音识别、意图和运动发布日志：
+
+```bash
+cd ~/small_car_f407/rpi_host/ros2
+docker compose logs -f | grep -E "Voice daemon|Transcript|Intent|Motion"
+```
+
+运动速度和持续时间在 `rpi_host/ros2/compose.yaml` 的 `CAR_VOICE_*` 环境变量中配置，所有值仍受 bridge 的最大速度限制和 MCU 超声避障限制。
 
 ## 参数调试
 
@@ -223,6 +240,21 @@ dmesg | grep -i tty
 sudo usermod -aG dialout ubuntu
 minicom -D /dev/ttyACM0 -b 115200
 ```
+
+自动恢复 MCU USB：
+
+```bash
+sudo install -m 0644 systemd/small-car-mcu-recovery.path /etc/systemd/system/
+sudo install -m 0644 systemd/small-car-mcu-recovery.service /etc/systemd/system/
+sudo chmod +x tools/recover_mcu_usb.sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now small-car-mcu-recovery.path
+systemctl status small-car-mcu-recovery.path
+journalctl -u small-car-mcu-recovery.service -f
+```
+
+bridge 收到 `/cmd_vel` 但串口写入失败时会自动创建恢复请求。宿主机随后复位
+CH9102、等待串口重新枚举并重建 ROS2 容器，无需手工重启树莓派。
 
 ## 相机测试
 

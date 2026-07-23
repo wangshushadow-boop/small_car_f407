@@ -8,8 +8,30 @@ services:
     ipc: host
     devices:
       - /dev/serial/by-id/usb-1a86_USB_Single_Serial_5C2C059301-if00:/dev/small_car_mcu
+      - /dev/snd:/dev/snd
+      - /dev/video0:/dev/video0
     volumes:
       - ..:/workspace/rpi_host
+      - /home/ubuntu/.hermes:/home/ubuntu/.hermes
+      # Hermes 虚拟环境的 Python 是指向 uv 目录的符号链接，需同时挂载链接目标。
+      - /home/ubuntu/.local/share/uv:/home/ubuntu/.local/share/uv:ro
+    environment:
+      HOME: /home/ubuntu
+      PYTHONUNBUFFERED: "1"
+      # 避免容器以 root 身份在挂载的源码目录生成无法删除的 __pycache__。
+      PYTHONDONTWRITEBYTECODE: "1"
+      CAR_VOICE_INPUT_DEVICE: "0"
+      CAR_VOICE_PLAYBACK_DEVICE: plughw:CARD=USB,DEV=0
+      CAR_VOICE_STT_PROVIDER: sensevoice
+      CAR_VOICE_WAKE_ON_ANY_SPEECH: "false"
+      CAR_VOICE_SENSEVOICE_PYTHON: /home/ubuntu/.hermes/sensevoice-venv/bin/python
+      CAR_VOICE_SENSEVOICE_SCRIPT: /home/ubuntu/.hermes/car_voice/sensevoice_transcribe.py
+      CAR_VOICE_CAMERA_CAPTURE_BIN: /workspace/rpi_host/build/v4l2_capture
+      CAR_VOICE_CAMERA_DEVICE: /dev/video0
+      CAR_VOICE_FORWARD_SPEED_MPS: "0.55"
+      CAR_VOICE_REVERSE_SPEED_MPS: "0.45"
+      CAR_VOICE_ANGULAR_SPEED_RAD_S: "1.8"
+      CAR_VOICE_MOTION_DURATION_SECONDS: "1.5"
     working_dir: /workspace/rpi_host/ros2_ws
     command: >-
       bash -lc "source /opt/ros/kilted/setup.bash &&

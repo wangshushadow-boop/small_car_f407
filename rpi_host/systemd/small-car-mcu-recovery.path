@@ -1,0 +1,9 @@
+[Unit]
+Description=监视小车 MCU USB 恢复请求
+
+[Path]
+PathExists=/home/ubuntu/small_car_f407/rpi_host/runtime/mcu_recovery.request
+Unit=small-car-mcu-recovery.service
+
+[Install]
+WantedBy=multi-user.target

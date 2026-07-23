@@ -1,0 +1,8 @@
+[Unit]
+Description=复位小车 MCU USB 并重建 ROS2 容器
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/ubuntu/small_car_f407/rpi_host/tools/recover_mcu_usb.sh

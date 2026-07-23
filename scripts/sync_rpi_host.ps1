@@ -108,7 +108,11 @@ try {
   $remote_steps += "cmake --build '$RemoteProject/build' -j4"
   # 运行协议单元测试。失败时脚本会停止，不会继续重启 ROS2 bridge。
   $remote_steps += "ctest --test-dir '$RemoteProject/build' --output-on-failure"
+  # 恢复脚本由 systemd 直接执行，解压后确保它保留可执行权限。
+  $remote_steps += "chmod +x '$RemoteProject/tools/recover_mcu_usb.sh'"
   # 重建并后台启动 ROS2 bridge。
+  # 语音服务现由 ROS2 容器统一管理；停止旧宿主机服务，避免争抢麦克风。
+  $remote_steps += "systemctl --user disable --now hermes-car-voice.service || true"
   $remote_steps += "cd '$RemoteProject/ros2'"
   $remote_steps += "docker compose build"
   $remote_steps += "docker compose up -d --force-recreate"

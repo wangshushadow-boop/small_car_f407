@@ -83,3 +83,4 @@ Desktop.ini
 *.tmp
 *.bak
 *.orig
+rpi_host/runtime/*.request
