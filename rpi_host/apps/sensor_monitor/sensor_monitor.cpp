@@ -1,12 +1,11 @@
+/**
+ * @file sensor_monitor.cpp
+ * @brief 提供 MCU 传感器、里程计和底盘状态的命令行监视工具。
+ *
+ * 程序启动时可自动从 YAML 下发底盘参数，并按命令行选项选择要打印的遥测类型。
+ */
 #include "small_car_host/car_client.hpp"
 #include "small_car_host/chassis_config.hpp"
-
-/*
- * 传感器监视工具。
- *
- * 用于在树莓派命令行直接查看 MCU 上传的数据，调试时通常会先停止 ROS2 bridge，
- * 再运行本工具独占串口。默认会尝试下发 YAML 参数，但参数失败时仍继续打印数据。
- */
 
 #include <chrono>
 #include <cstdint>
@@ -17,11 +16,16 @@
 
 namespace {
 
+/** 命令行解析后的运行选项。每个 show_* 字段对应一个遥测开关位。 */
 struct Options {
+  /** MCU 串口设备路径。 */
   std::string port = "/dev/ttyACM0";
+  /** 底盘参数文件；为空时根据可执行文件位置自动查找。 */
   std::string config;
   int baudrate = 115200;
+  /** 同类消息两次打印之间的最小间隔。 */
   int interval_ms = 100;
+  /** 参数下发失败时是否直接退出。 */
   bool strict_config = false;
   bool show_imu = false;
   bool show_encoder = false;
@@ -31,6 +35,7 @@ struct Options {
   bool show_odometry = false;
 };
 
+/** 打印命令语法和常用示例。 */
 void PrintUsage() {
   std::cout
       << "Usage:\n"
@@ -43,6 +48,10 @@ void PrintUsage() {
       << "  sensor_monitor --port /dev/ttyACM0 --ultra\n";
 }
 
+/**
+ * 解析串口、打印周期和遥测选择参数。
+ * 未显式选择数据时默认显示 IMU、编码器和超声，兼顾常见调试需求。
+ */
 bool ParseArgs(int argc, char** argv, Options* options) {
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
@@ -96,6 +105,7 @@ bool ParseArgs(int argc, char** argv, Options* options) {
   return true;
 }
 
+/** 判断一个消息类型是否已经达到用户指定的打印周期。 */
 bool CanPrint(std::chrono::steady_clock::time_point now,
               std::chrono::steady_clock::time_point* last_print,
               int interval_ms) {
@@ -114,6 +124,7 @@ bool CanPrint(std::chrono::steady_clock::time_point now,
   return true;
 }
 
+/** 以下 Print* 函数只负责稳定的单行文本格式，便于终端筛选和日志解析。 */
 void PrintImu(const small_car::ImuRaw& imu) {
   std::cout << "[IMU] t=" << imu.mcu_time_ms
             << " ax=" << imu.ax
@@ -190,6 +201,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  // sensor_monitor 需要独占串口；运行前应停止正在使用同一设备的 ROS 桥接节点。
   small_car::CarClient client;
   if (!client.Open(options.port, options.baudrate)) {
     std::cerr << "open serial failed: " << options.port << "\n";
@@ -226,6 +238,7 @@ int main(int argc, char** argv) {
     return 3;
   }
 
+  // 根据用户选择生成 MCU 遥测掩码，避免无关数据占用 115200 波特率带宽。
   std::uint16_t telemetry_mask = 0;
   if (options.show_imu) {
     telemetry_mask |= small_car::kTelemetryImu;
@@ -251,6 +264,7 @@ int main(int argc, char** argv) {
   std::cout << "[MON] interval=" << options.interval_ms << " ms\n";
   std::cout << "[MON] press Ctrl+C to stop\n";
 
+  // mcu_time_ms 用于识别缓存是否更新，主机时钟仅用于限制终端打印频率。
   std::uint32_t last_imu_time = 0;
   std::uint32_t last_encoder_time = 0;
   std::uint32_t last_chassis_time = 0;

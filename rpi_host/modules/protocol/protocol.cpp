@@ -1,13 +1,10 @@
-#include "small_car_host/protocol.hpp"
-
-/*
- * MCU 串口协议模块。
+/**
+ * @file protocol.cpp
+ * @brief 实现树莓派与 STM32 二进制协议的编码、解码和流式拆帧。
  *
- * 这里和 MCU 的 raspi_link.c 是一一对应关系：
- * - 下行：编码控制、舵机、心跳、参数命令。
- * - 上行：解析底盘状态、编码器、IMU、里程计、参数回读和 ACK。
- * 所有多字节字段统一使用小端序，帧头 AA 55 用于从串口字节流中重新同步。
+ * 所有多字节整数均按小端序传输；CRC 覆盖版本字段到负载末尾，不包含同步头。
  */
+#include "small_car_host/protocol.hpp"
 
 #include <algorithm>
 #include <chrono>

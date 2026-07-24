@@ -1,3 +1,9 @@
+/**
+ * @file protocol_test.cpp
+ * @brief 覆盖小车串口协议编码、解码、拆包和异常恢复的单元测试。
+ *
+ * 测试使用固定字节序列，不需要连接真实 MCU 或串口设备。
+ */
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -8,12 +14,14 @@
 
 namespace {
 
+/** 轻量断言辅助函数，失败时抛出异常并由 main 统一报告。 */
 void Expect(bool value, const char* message) {
   if (!value) {
     throw std::runtime_error(message);
   }
 }
 
+/** 构造一段已知的底盘状态负载，供解码测试复用。 */
 std::vector<std::uint8_t> PayloadChassis() {
   return {
       0x64, 0x00, 0x00, 0x00,  // t=100
@@ -26,12 +34,14 @@ std::vector<std::uint8_t> PayloadChassis() {
   };
 }
 
+/** 使用标准字符串 "123456789" 校验 CRC 参数是否正确。 */
 void TestCrc() {
   const char* text = "123456789";
   const auto* bytes = reinterpret_cast<const std::uint8_t*>(text);
   Expect(small_car::Crc16CcittFalse(bytes, 9) == 0x29B1, "crc known value failed");
 }
 
+/** 验证完整帧编码后能够无损地被流式解析器还原。 */
 void TestEncodeParse() {
   const auto raw = small_car::EncodeFrame(
       static_cast<std::uint8_t>(small_car::Msg::kHeartbeat), 7, {0xD2, 0x04, 0x00, 0x00});
@@ -44,6 +54,7 @@ void TestEncodeParse() {
   Expect(frames[0].payload.size() == 4, "payload size mismatch");
 }
 
+/** 验证噪声、拆分输入以及尾部单字节同步头的恢复逻辑。 */
 void TestNoiseAndSplit() {
   const auto raw = small_car::EncodeFrame(static_cast<std::uint8_t>(small_car::Msg::kAck),
                                           1,
@@ -67,6 +78,7 @@ void TestNoiseAndSplit() {
          "ack field mismatch");
 }
 
+/** 验证 CRC 被破坏的帧不会交给业务层。 */
 void TestBadCrcDropped() {
   auto raw = small_car::MakeHeartbeatFrame(2, 1);
   raw.back() ^= 0x01;
@@ -74,6 +86,7 @@ void TestBadCrcDropped() {
   Expect(parser.Feed(raw).empty(), "bad crc should be dropped");
 }
 
+/** 验证底盘状态每个字段的偏移、符号和字节序。 */
 void TestDecodeChassis() {
   const auto raw = small_car::EncodeFrame(
       static_cast<std::uint8_t>(small_car::Msg::kChassisStatus), 3, PayloadChassis());
@@ -91,6 +104,7 @@ void TestDecodeChassis() {
   Expect(status->ultra_mm == 560, "ultra mismatch");
 }
 
+/** 验证三维里程计长负载的完整解码。 */
 void TestDecodeOdometry() {
   const auto raw = small_car::EncodeFrame(
       static_cast<std::uint8_t>(small_car::Msg::kOdometry),
@@ -128,6 +142,7 @@ void TestDecodeOdometry() {
   Expect(odom->wheel_yaw_fused, "odometry fusion flag mismatch");
 }
 
+/** 验证左右轮速和单周期位移调试消息。 */
 void TestDecodeOdometryDebug() {
   const auto raw = small_car::EncodeFrame(
       static_cast<std::uint8_t>(small_car::Msg::kOdometryDebug),
@@ -153,6 +168,7 @@ void TestDecodeOdometryDebug() {
   Expect(odom_debug->right_delta_mm == 3, "right delta mismatch");
 }
 
+/** 验证里程计清零使用参数消息中的专用操作码。 */
 void TestOdomResetFrame() {
   const auto raw = small_car::MakeOdomResetFrame(6, 1000);
   small_car::FrameParser parser;
@@ -164,6 +180,7 @@ void TestOdomResetFrame() {
   Expect(frames[0].payload[4] == 1, "odom reset param mismatch");
 }
 
+/** 验证参数设置和查询帧的操作码、编号与 32 位数值。 */
 void TestParamSetGetFrame() {
   const auto set_raw = small_car::MakeParamSetFrame(7, 1, 2410, 1000);
   small_car::FrameParser parser;
@@ -185,6 +202,7 @@ void TestParamSetGetFrame() {
   Expect(get_frames[0].payload[5] == 1, "param get id mismatch");
 }
 
+/** 验证 MCU 参数回读消息。 */
 void TestDecodeParamValue() {
   const auto raw = small_car::EncodeFrame(
       static_cast<std::uint8_t>(small_car::Msg::kParamValue),
@@ -204,6 +222,7 @@ void TestDecodeParamValue() {
   Expect(param->value == 2410, "param value mismatch");
 }
 
+/** 验证物理速度控制量按 mm/s 和 mrad/s 编码。 */
 void TestDrivePhysicalVelocity() {
   const auto raw = small_car::MakeDriveFrame(1, 600, -2000, 1);
   small_car::FrameParser parser;

@@ -1,11 +1,10 @@
-#include "small_car_host/serial_port.hpp"
-
-/*
- * Linux 串口封装模块。
+/**
+ * @file serial_port.cpp
+ * @brief 实现 Linux termios 串口的打开、配置和非阻塞收发。
  *
- * 这里只处理设备打开、波特率、8N1、raw 模式和非阻塞读写。
- * 上层协议不要直接依赖 termios 细节，统一通过 SerialPort 读写字节。
+ * 本文件是通信栈最底层，只处理字节，不包含任何小车协议逻辑。
  */
+#include "small_car_host/serial_port.hpp"
 
 #include <cerrno>
 #include <cstring>

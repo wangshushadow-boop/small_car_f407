@@ -1,15 +1,14 @@
+/**
+ * @file v4l2_capture.cpp
+ * @brief 使用 Linux V4L2 原生接口抓取 MJPEG 或 YUYV 摄像头图像。
+ *
+ * 程序演示能力枚举、格式设置、MMAP 缓冲区和像素转换，不依赖 OpenCV。
+ */
 #include <fcntl.h>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-
-/*
- * V4L2 相机抓图工具。
- *
- * 用于绕过 OpenCV，直接验证 USB 摄像头在 Linux 下的格式、分辨率和原始输出。
- * 支持 MJPG 保存为 jpg，也支持 YUYV 保存为原始 yuyv 文件。
- */
 
 #include <cerrno>
 #include <cstdint>
@@ -23,11 +22,13 @@
 
 namespace {
 
+/** 保存一个由驱动 mmap 到用户空间的采集缓冲区。 */
 struct Buffer {
   void *start = nullptr;
   size_t length = 0;
 };
 
+/** 对 ioctl 的薄封装：系统调用被信号中断时自动重试。 */
 int Xioctl(int fd, unsigned long request, void *arg) {
   // ioctl 可能被信号打断，遇到 EINTR 时重试原请求。
   int ret = 0;
@@ -37,6 +38,7 @@ int Xioctl(int fd, unsigned long request, void *arg) {
   return ret;
 }
 
+/** 将十进制命令行参数转换为整数，失败时使用默认值。 */
 int ParseInt(const char *text, int fallback) {
   if (text == nullptr) {
     return fallback;
@@ -51,6 +53,7 @@ int ParseInt(const char *text, int fallback) {
   return static_cast<int>(value);
 }
 
+/** 将用户可读格式名转换为 V4L2 fourcc；不支持时返回 0。 */
 uint32_t ParseFormat(const std::string &format) {
   if ((format == "mjpg") || (format == "MJPG") || (format == "jpeg") ||
       (format == "JPEG")) {
@@ -65,6 +68,7 @@ uint32_t ParseFormat(const std::string &format) {
   return 0;
 }
 
+/** 将颜色换算结果限制到 8 位 RGB 合法范围。 */
 uint8_t ClipRgb(int value) {
   if (value < 0) {
     return 0;
@@ -75,6 +79,7 @@ uint8_t ClipRgb(int value) {
   return static_cast<uint8_t>(value);
 }
 
+/** 将 Y0-U-Y1-V 共享色度格式转换为 RGB24，主要用于生成可查看的 PPM 预览。 */
 void YuyvToRgb(const uint8_t *yuyv, int width, int height, std::vector<uint8_t> *rgb) {
   rgb->assign(static_cast<size_t>(width) * static_cast<size_t>(height) * 3U, 0U);
 
@@ -103,6 +108,7 @@ void YuyvToRgb(const uint8_t *yuyv, int width, int height, std::vector<uint8_t> 
   }
 }
 
+/** 原样保存 MJPEG 或 YUYV 字节，不改变驱动给出的内容。 */
 bool WriteBinaryFile(const std::string &path, const void *data, size_t size) {
   std::ofstream file(path, std::ios::binary);
   if (!file) {
@@ -113,6 +119,7 @@ bool WriteBinaryFile(const std::string &path, const void *data, size_t size) {
   return file.good();
 }
 
+/** 将 RGB24 数据写成无需额外图像库即可生成的 P6 PPM 文件。 */
 bool WritePpmFile(const std::string &path, int width, int height, const std::vector<uint8_t> &rgb) {
   std::ofstream file(path, std::ios::binary);
   if (!file) {
@@ -125,6 +132,7 @@ bool WritePpmFile(const std::string &path, int width, int height, const std::vec
   return file.good();
 }
 
+/** 把 fourcc 的四个字节转换为便于终端显示的字符串。 */
 std::string FourccToString(uint32_t fourcc) {
   char text[5] = {
       static_cast<char>(fourcc & 0xFFU),
@@ -136,6 +144,7 @@ std::string FourccToString(uint32_t fourcc) {
   return text;
 }
 
+/** 打印原生采集工具的参数格式。 */
 void PrintUsage(const char *program) {
   std::cout << "Usage:\n"
             << "  " << program << " <device> <mjpg|yuyv> <output> [width] [height]\n\n"
@@ -163,6 +172,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  // 第一步：打开设备并确认它支持 V4L2 视频采集。
   const int fd = open(device_path.c_str(), O_RDWR);
   if (fd < 0) {
     std::perror("open camera");
@@ -176,6 +186,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  // 第二步：请求目标格式；驱动可以返回最接近的分辨率或像素格式。
   v4l2_format format {};
   format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   format.fmt.pix.width = static_cast<uint32_t>(width);
@@ -196,6 +207,7 @@ int main(int argc, char *argv[]) {
   std::cout << "Format: " << FourccToString(actual_format) << " "
             << actual_width << "x" << actual_height << std::endl;
 
+  // 第三步：申请驱动缓冲区并映射到进程地址空间。
   v4l2_requestbuffers request {};
   request.count = 4;
   request.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -208,6 +220,7 @@ int main(int argc, char *argv[]) {
 
   // 使用 mmap 让驱动直接把图像写入共享缓冲区，避免额外拷贝。
   std::vector<Buffer> buffers(request.count);
+  // 第四步：把全部缓冲区排入采集队列后启动视频流。
   for (uint32_t i = 0; i < request.count; ++i) {
     v4l2_buffer buffer {};
     buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -269,6 +282,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // 第五步：取出稳定后的最后一帧，根据实际格式保存原始数据和预览。
   bool ok = false;
   const uint8_t *frame_data = static_cast<const uint8_t *>(buffers[frame.index].start);
   if (actual_format == V4L2_PIX_FMT_MJPEG) {
@@ -284,6 +298,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // 第六步：无论文件保存是否成功，都停止视频流并释放 mmap/文件描述符。
   if (Xioctl(fd, VIDIOC_STREAMOFF, &type) < 0) {
     std::perror("VIDIOC_STREAMOFF");
   }

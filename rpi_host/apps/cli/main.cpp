@@ -1,3 +1,9 @@
+/**
+ * @file main.cpp
+ * @brief 提供小车串口协议的命令行调试客户端。
+ *
+ * 工具用于手动发送停止、速度、舵机和里程计命令，并查看 MCU 上行状态。
+ */
 #include <chrono>
 #include <cstdint>
 #include <exception>
@@ -5,18 +11,12 @@
 #include <string>
 #include <thread>
 
-/*
- * MCU 命令行调试工具。
- *
- * 该程序面向手动排错：发送心跳、停车、底盘速度、舵机脉宽和里程计清零命令。
- * 更完整的传感器观察使用 sensor_monitor，ROS2 场景使用 bridge。
- */
-
 #include "small_car_host/car_client.hpp"
 #include "small_car_host/chassis_config.hpp"
 
 namespace {
 
+/** 打印所有支持的命令和参数格式。 */
 void PrintUsage() {
   std::cout
       << "Usage:\n"
@@ -29,6 +29,7 @@ void PrintUsage() {
       << "  small_car_host_cli --port /dev/ttyACM0 odom-reset\n";
 }
 
+/** 返回指定命令行选项后面的值；选项不存在或缺少值时返回空字符串。 */
 std::string ArgValue(int argc, char** argv, const std::string& key) {
   for (int i = 1; i + 1 < argc; ++i) {
     if (argv[i] == key) {
@@ -38,6 +39,7 @@ std::string ArgValue(int argc, char** argv, const std::string& key) {
   return {};
 }
 
+/** 查找第一个业务命令的位置，跳过 --port、--config 等全局选项。 */
 int FirstCommandIndex(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
@@ -49,6 +51,7 @@ int FirstCommandIndex(int argc, char** argv) {
   return -1;
 }
 
+/** 未提供业务命令时，检查是否混入无法识别的额外参数。 */
 bool HasUnexpectedArgument(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
@@ -61,6 +64,10 @@ bool HasUnexpectedArgument(int argc, char** argv) {
   return false;
 }
 
+/**
+ * 读取完整底盘参数文件并执行“写入后回读”校验。
+ * 返回值直接作为进程退出码，0 表示全部参数已经生效。
+ */
 int ApplyDefaultConfig(int argc, char** argv, small_car::CarClient* client) {
   const std::string config_arg = ArgValue(argc, argv, "--config");
   const std::string config_path =
@@ -85,6 +92,7 @@ int ApplyDefaultConfig(int argc, char** argv, small_car::CarClient* client) {
   }
 }
 
+/** 打印客户端当前缓存的最新状态；没有收到过的消息类型会被跳过。 */
 void PrintStatus(const small_car::CarClient& client) {
   if (const auto status = client.GetChassisStatus()) {
     std::cout << "[CHASSIS] t=" << status->mcu_time_ms
@@ -122,6 +130,7 @@ void PrintStatus(const small_car::CarClient& client) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  // 先解析全局选项和业务命令，避免打开串口后才发现参数不完整。
   const std::string port = ArgValue(argc, argv, "--port");
   const int command_index = FirstCommandIndex(argc, argv);
   if (port.empty() || (command_index < 0 && HasUnexpectedArgument(argc, argv))) {
@@ -135,11 +144,13 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  // 所有命令执行前统一下发版本化配置，保证调试结果与 ROS 节点一致。
   const int config_result = ApplyDefaultConfig(argc, argv, &client);
   if (config_result != 0 || command_index < 0) {
     return config_result;
   }
 
+  // 单次命令发送成功后立即退出；MCU 的 ACK 可在 monitor 模式中观察。
   const std::string command = argv[command_index];
   if (command == "heartbeat") {
     return client.SendHeartbeat() ? 0 : 3;
@@ -177,6 +188,7 @@ int main(int argc, char** argv) {
     heartbeat_ms = std::stoi(heartbeat_arg);
   }
 
+  // monitor 模式持续轮询串口，并可按指定周期发送心跳维持主机控制权。
   auto last_heartbeat = std::chrono::steady_clock::now();
   auto last_print = std::chrono::steady_clock::now();
   while (true) {

@@ -1,13 +1,10 @@
-#include "small_car_host/car_client.hpp"
-
-/*
- * MCU 客户端模块。
+/**
+ * @file car_client.cpp
+ * @brief 实现面向应用层的 MCU 通信客户端及最近消息缓存。
  *
- * CarClient 是上位机其它模块访问 MCU 的统一入口：
- * - 对外提供语义化方法，例如 SendDrive、SendServo、SendParamSet。
- * - 内部负责调用协议编码、串口收发和最近一帧状态缓存。
- * - CLI、sensor_monitor 和 ROS2 bridge 都通过它复用同一套通信逻辑。
+ * 本模块将串口传输和协议编解码组合起来，但不创建线程或保存历史数据。
  */
+#include "small_car_host/car_client.hpp"
 
 namespace small_car {
 

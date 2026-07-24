@@ -1,11 +1,10 @@
-#include "small_car_host/audio_device.hpp"
-
-/*
- * ALSA 音频设备封装。
+/**
+ * @file audio_device.cpp
+ * @brief 实现基于 ALSA 的同步录音、播放和 WAV 文件写入。
  *
- * 当前主要用于 USB 麦克风和音响测试。这里把录音、播放、WAV 文件读写封装起来，
- * 方便后续语音模块复用，而不直接在业务代码里散落 ALSA API。
+ * ALSA 错误会转换为 C++ 异常，调用者可在应用层统一显示或恢复。
  */
+#include "small_car_host/audio_device.hpp"
 
 #include <alsa/asoundlib.h>
 

@@ -1,12 +1,11 @@
+/**
+ * @file camera_capture.cpp
+ * @brief 使用 OpenCV 从 V4L2 摄像头抓取单帧并保存为 JPEG。
+ *
+ * 该工具用于快速验证摄像头设备、分辨率和 OpenCV 视频输入链路。
+ */
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/videoio.hpp>
-
-/*
- * OpenCV 相机抓图工具。
- *
- * 用于快速验证 USB 摄像头能否被 OpenCV 打开，并保存一张 jpg 图片。
- * 如果 OpenCV 失败，再使用 v4l2_capture 排查底层格式和驱动问题。
- */
 
 #include <chrono>
 #include <cstdlib>
@@ -16,6 +15,7 @@
 
 namespace {
 
+/** 将十进制参数转换为整数；格式不合法时使用调用者给出的默认值。 */
 int ParseInt(const char* text, int fallback) {
   if (text == nullptr) {
     return fallback;
@@ -33,6 +33,7 @@ int ParseInt(const char* text, int fallback) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  // 参数依次为设备编号、输出路径、宽和高，省略时使用适合调试的默认值。
   const int device = (argc > 1) ? ParseInt(argv[1], 0) : 0;
   const std::string output_path = (argc > 2) ? argv[2] : "camera_capture.jpg";
   const int width = (argc > 3) ? ParseInt(argv[3], 640) : 640;

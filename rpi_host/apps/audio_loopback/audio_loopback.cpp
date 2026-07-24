@@ -1,10 +1,10 @@
-#include "small_car_host/audio_device.hpp"
-
-/*
- * 音频回环测试工具。
+/**
+ * @file audio_loopback.cpp
+ * @brief 录制麦克风音频、保存 WAV，并立即通过扬声器回放。
  *
- * 先录制一段 WAV，再播放出来，用于验证 USB 麦克风和音响是否都工作正常。
+ * 用于验证 USB 音频设备的录音和播放路径是否同时可用。
  */
+#include "small_car_host/audio_device.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -13,6 +13,7 @@
 
 namespace {
 
+/** 解析无符号整数；参数缺失或非法时保留默认值。 */
 uint32_t ParseU32(const char* text, uint32_t fallback) {
   try {
     return static_cast<uint32_t>(std::stoul(text));

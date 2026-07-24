@@ -1,3 +1,10 @@
+/**
+ * @file bridge_node.cpp
+ * @brief 实现 ROS 2 消息与 STM32 串口协议之间的双向桥接节点。
+ *
+ * 节点负责底盘参数下发、速度和舵机命令转发、传感器消息发布、TF 发布以及
+ * 串口故障诊断；运动规划和速度平滑由独立运动控制节点完成。
+ */
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -29,17 +36,6 @@
 #include "small_car_host/car_client.hpp"
 #include "small_car_host/chassis_config.hpp"
 
-/*
- * ROS2 与 MCU 桥接节点。
- *
- * 该节点是树莓派上位机的正式运行入口：
- * - 订阅 ROS2 控制命令并转换成 MCU 串口协议。
- * - 读取 MCU 上传的 IMU、编码器、超声、里程计和诊断状态。
- * - 发布 ROS2 标准话题、服务和 TF，供后续导航、视觉、语音算法复用。
- *
- * 注意：节点启动时会打开串口并独占设备，运行 sensor_monitor 或 CLI 前需要先停止 bridge。
- */
-
 namespace small_car_ros {
 namespace {
 
@@ -47,6 +43,7 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kDegreesToRadians = kPi / 180.0;
 constexpr double kGravity = 9.80665;
 
+/** 将 roll、pitch、yaw 欧拉角转换为 ROS 使用的单位四元数。 */
 geometry_msgs::msg::Quaternion QuaternionFromRpy(double roll, double pitch, double yaw) {
   const double cr = std::cos(roll * 0.5);
   const double sr = std::sin(roll * 0.5);
@@ -63,6 +60,7 @@ geometry_msgs::msg::Quaternion QuaternionFromRpy(double roll, double pitch, doub
   return result;
 }
 
+/** 构造一项 diagnostic_msgs 键值，减少诊断发布代码的重复。 */
 diagnostic_msgs::msg::KeyValue DiagnosticValue(const std::string& key,
                                                 const std::string& value) {
   diagnostic_msgs::msg::KeyValue result;
@@ -73,8 +71,15 @@ diagnostic_msgs::msg::KeyValue DiagnosticValue(const std::string& key,
 
 }  // namespace
 
+/**
+ * ROS 2 与 MCU 的唯一串口桥接节点。
+ *
+ * 节点拥有串口设备，并把 MCU 的整数协议单位转换为 ROS SI 单位。其它节点不应
+ * 直接打开同一串口，以免两进程分走字节导致协议帧损坏。
+ */
 class SmallcarRosAndMcuBridge : public rclcpp::Node {
  public:
+  /** 按依赖顺序初始化：参数 -> 串口 -> ROS 接口 -> MCU 参数 -> 遥测开关。 */
   SmallcarRosAndMcuBridge() : Node("smallcar_ros_and_mcu_bridge") {
     // 构造阶段只做一次性初始化：读取 ROS 参数、打开串口、下发底盘参数、创建话题和定时器。
     DeclareParameters();
@@ -96,6 +101,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   }
 
  private:
+  /** 单个舵机从 ROS 弧度到 MCU PWM 脉宽的线性映射参数。 */
   struct ServoMapping {
     int center_us = 1500;
     int min_us = 800;
@@ -105,6 +111,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     double commanded_rad = 0.0;
   };
 
+  /** 声明串口、话题、传感器、协方差和舵机映射参数。 */
   void DeclareParameters() {
     declare_parameter<std::string>("serial_port", "/dev/small_car_mcu");
     declare_parameter<int>("baud_rate", 115200);
@@ -139,6 +146,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     DeclareServoParameters("right", 1250, 800, 1700);
   }
 
+  /** 为左右舵机声明一组同结构参数，前缀由 name 区分。 */
   void DeclareServoParameters(const std::string& name, int center, int minimum,
                               int maximum) {
     declare_parameter<int>(name + "_servo_center_us", center);
@@ -148,6 +156,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     declare_parameter<double>(name + "_servo_sign", 1.0);
   }
 
+  /** 启动时读取全部参数，并验证影响单位换算的比例值必须为正。 */
   void ReadParameters() {
     serial_port_ = get_parameter("serial_port").as_string();
     baud_rate_ = static_cast<int>(get_parameter("baud_rate").as_int());
@@ -194,6 +203,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     }
   }
 
+  /** 读取一组舵机参数并检查 min <= center <= max。 */
   ServoMapping ReadServoParameters(const std::string& name) {
     ServoMapping result;
     result.center_us = static_cast<int>(get_parameter(name + "_servo_center_us").as_int());
@@ -208,12 +218,14 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     return result;
   }
 
+  /** 打开桥接节点独占的 MCU 串口，失败时阻止节点继续启动。 */
   void OpenController() {
     if (!client_.Open(serial_port_, baud_rate_)) {
       throw std::runtime_error("cannot open serial port: " + serial_port_);
     }
   }
 
+  /** 从 YAML 加载参数并逐项写入 MCU；失败时保留桥接功能用于现场排查。 */
   void ApplyControllerConfig() {
     const auto parameters = small_car::LoadChassisConfig(chassis_config_);
     std::string error;
@@ -231,6 +243,12 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
                 parameters.size());
   }
 
+  /**
+   * 创建全部 ROS 发布、订阅、服务和定时器。
+   *
+   * 5 ms 定时器负责尽快清空串口上行数据；command_rate_hz 定时器负责维持
+   * 下行速度或心跳，两者分开避免传感器处理拖慢安全停车。
+   */
   void CreateRosInterfaces() {
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("odom", 10);
     if (publish_imu_raw_) {
@@ -272,6 +290,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
         std::bind(&SmallcarRosAndMcuBridge::MaintainCommand, this));
   }
 
+  /** 根据启用的 ROS 发布项配置 MCU，关闭无消费者的周期遥测以节省串口带宽。 */
   void ConfigureTelemetry() {
     std::uint16_t mask =
         small_car::kTelemetryChassis | small_car::kTelemetryImu |
@@ -284,6 +303,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     }
   }
 
+  /** 接收平滑后的速度，限幅并转换为 mm/s、mrad/s 后立即发送。 */
   void OnCmdVel(const geometry_msgs::msg::Twist::SharedPtr message) {
     linear_command_mm_s_ = ToMilliUnits(message->linear.x, max_linear_speed_mps_);
     angular_command_mrad_s_ =
@@ -297,11 +317,18 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     }
   }
 
+  /** 将 SI 单位浮点数限幅并转换为协议使用的千分之一单位。 */
   static std::int16_t ToMilliUnits(double value, double maximum) {
     const double limited = std::clamp(value, -maximum, maximum);
     return static_cast<std::int16_t>(std::lround(limited * 1000.0));
   }
 
+  /**
+   * 周期维持速度命令和失联停车。
+   *
+   * 有新速度时重复发送以满足 MCU 看门狗；命令超时后发送一次 Stop；完全空闲时
+   * 降频发送心跳，兼顾链路检测和 USB 稳定性。
+   */
   void MaintainCommand() {
     const auto now = std::chrono::steady_clock::now();
     if (!have_cmd_vel_) {
@@ -326,6 +353,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     }
   }
 
+  /** 请求宿主机恢复 USB 映射；冷却时间防止故障时反复重建容器。 */
   void RequestMcuRecovery() {
     /*
      * 容器没有复位宿主机 USB 的权限。这里只写入一个请求文件，由宿主机
@@ -348,6 +376,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     RCLCPP_ERROR(get_logger(), "MCU link failed; USB recovery requested");
   }
 
+  /** 解析 JointTrajectory 第一轨迹点，只更新其中明确给出的左右舵机关节。 */
   void OnServoTrajectory(
       const trajectory_msgs::msg::JointTrajectory::SharedPtr message) {
     if (message->points.empty()) {
@@ -377,6 +406,10 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     }
   }
 
+  /**
+   * 将舵机角度线性映射为 PWM 脉宽。
+   * 正负半轴分别使用 center-max 和 min-center，支持不对称机械行程。
+   */
   static std::uint16_t ServoPulse(const ServoMapping& mapping) {
     double normalized = 2.0 * mapping.commanded_rad / mapping.range_rad;
     normalized = std::clamp(normalized * mapping.sign, -1.0, 1.0);
@@ -388,6 +421,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     return static_cast<std::uint16_t>(std::lround(pulse));
   }
 
+  /** 将空服务调用转换为 MCU 里程计清零命令。 */
   void OnResetOdometry(const std::shared_ptr<std_srvs::srv::Empty::Request>,
                        std::shared_ptr<std_srvs::srv::Empty::Response>) {
     if (!client_.SendOdomReset()) {
@@ -395,6 +429,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     }
   }
 
+  /** 高频串口轮询入口；每次轮询后尝试发布所有已经更新的消息类型。 */
   void PollController() {
     client_.Poll();
     PublishOdometry();
@@ -404,6 +439,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     PublishDiagnostics();
   }
 
+  /** 发布新的 MCU 里程计，并可同步广播 odom -> base_link 动态 TF。 */
   void PublishOdometry() {
     const auto value = client_.GetOdometry();
     if (!value.has_value() || value->mcu_time_ms == last_odom_time_ms_) {
@@ -439,6 +475,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     }
   }
 
+  /** 把 MCU 的毫度姿态转换为 ROS 四元数。 */
   static geometry_msgs::msg::Quaternion OdomQuaternion(
       const small_car::Odometry& value) {
     return QuaternionFromRpy(value.roll_mdeg / 1000.0 * kDegreesToRadians,
@@ -446,6 +483,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
                              value.yaw_mdeg / 1000.0 * kDegreesToRadians);
   }
 
+  /** 填充 ROS 6x6 位姿/速度协方差；不观测的自由度使用较大方差。 */
   void SetOdometryCovariance(nav_msgs::msg::Odometry* message) const {
     // ROS 协方差是 6x6 行主序矩阵，对角线依次为 x/y/z/roll/pitch/yaw。
     for (const std::size_t index : {0U, 7U, 14U}) {
@@ -462,6 +500,12 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     message->twist.covariance[35] = odom_angular_velocity_variance_;
   }
 
+  /**
+   * 发布新的 IMU 数据。
+   *
+   * 原始加速度和角速度按当前 ICM20948 量程换算；/imu/data 的姿态取自 MCU
+   * 融合里程计，/imu/data_raw 可按配置关闭以避免重复流量。
+   */
   void PublishImu() {
     const auto value = client_.GetImuRaw();
     if (!value.has_value() || value->mcu_time_ms == last_imu_time_ms_) {
@@ -496,6 +540,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     }
   }
 
+  /** 发布控制源变化和有效超声测距；负距离仅更新控制源，不发布 Range。 */
   void PublishRange() {
     const auto value = client_.GetChassisStatus();
     if (!value.has_value() || value->mcu_time_ms == last_chassis_time_ms_) {
@@ -522,6 +567,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     range_pub_->publish(message);
   }
 
+  /** 对左右轮角速度做时间积分，形成 RViz 可观察的连续轮子转角。 */
   void PublishWheels() {
     if (!publish_joint_states_) {
       return;
@@ -545,6 +591,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     PublishJointState(now());
   }
 
+  /** 合并轮子积分位置、轮速和当前舵机角度，发布完整 JointState。 */
   void PublishJointState(const rclcpp::Time& stamp) {
     sensor_msgs::msg::JointState message;
     message.header.stamp = stamp;
@@ -568,6 +615,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     joint_pub_->publish(message);
   }
 
+  /** 汇总 MCU 外设、主机命令、串口写入和最近 ACK，发布标准诊断消息。 */
   void PublishDiagnostics() {
     const auto value = client_.GetDeviceStatus();
     if (!value.has_value() || value->mcu_time_ms == last_device_time_ms_) {
@@ -622,6 +670,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     diagnostics_pub_->publish(array);
   }
 
+  // 串口客户端、设备路径和 ROS 坐标系名称。
   small_car::CarClient client_;
   std::string serial_port_;
   std::string chassis_config_;
@@ -631,6 +680,8 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   std::string imu_frame_;
   std::string ultrasonic_frame_;
   int baud_rate_ = 115200;
+
+  // ROS SI 单位与 MCU 整数协议之间的限幅、尺寸和测距参数。
   double max_linear_speed_mps_ = 0.6;
   double max_angular_speed_rad_s_ = 2.0;
   double command_rate_hz_ = 20.0;
@@ -638,6 +689,8 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   double ultra_min_m_ = 0.02;
   double ultra_max_m_ = 4.0;
   double ultra_fov_rad_ = 0.52;
+
+  // 发布给定位和融合算法的初始方差；后续应使用实测数据标定。
   double odom_position_variance_ = 0.01;
   double odom_orientation_variance_ = 0.02;
   double odom_linear_velocity_variance_ = 0.04;
@@ -645,11 +698,15 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   double imu_acceleration_variance_ = 0.1;
   double imu_angular_velocity_variance_ = 0.02;
   double imu_orientation_variance_ = 0.02;
+
+  // RViz 轮子动画所需的积分位置，以及可选发布项开关。
   double left_wheel_position_rad_ = 0.0;
   double right_wheel_position_rad_ = 0.0;
   bool publish_tf_ = true;
   bool publish_imu_raw_ = false;
   bool publish_joint_states_ = true;
+
+  // 下行命令超时、空闲心跳和 USB 恢复节流状态。
   std::chrono::milliseconds cmd_vel_timeout_{500};
   std::chrono::milliseconds idle_heartbeat_interval_{1000};
   std::chrono::seconds recovery_request_cooldown_{30};
@@ -661,9 +718,12 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   bool last_control_send_ok_ = true;
   std::int16_t linear_command_mm_s_ = 0;
   std::int16_t angular_command_mrad_s_ = 0;
+
+  // 左右舵机当前映射和最近命令角度。
   ServoMapping left_servo_;
   ServoMapping right_servo_;
 
+  // 各 MCU 消息最近时间戳用于去重；UINT*_MAX 表示尚未接收过。
   std::uint32_t last_odom_time_ms_ = UINT32_MAX;
   std::uint32_t last_imu_time_ms_ = UINT32_MAX;
   std::uint32_t last_chassis_time_ms_ = UINT32_MAX;
@@ -673,6 +733,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   std::optional<small_car::Odometry> latest_odom_;
   std::optional<small_car::OdometryDebug> latest_odom_debug_;
 
+  // ROS 通信对象与定时器，生命周期均由节点统一管理。
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_raw_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
@@ -691,6 +752,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
 }  // namespace small_car_ros
 
 int main(int argc, char** argv) {
+  // 构造或运行异常会被记录为 FATAL，并以非零状态退出供 Docker 重启策略处理。
   rclcpp::init(argc, argv);
   try {
     rclcpp::spin(std::make_shared<small_car_ros::SmallcarRosAndMcuBridge>());

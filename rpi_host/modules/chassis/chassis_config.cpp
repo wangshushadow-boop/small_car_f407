@@ -1,11 +1,10 @@
-#include "small_car_host/chassis_config.hpp"
-
-/*
- * 底盘参数加载与下发模块。
+/**
+ * @file chassis_config.cpp
+ * @brief 实现底盘 YAML 参数的解析、完整性校验、下发和回读确认。
  *
- * YAML 文件是标定参数的唯一记录来源。上位机启动后读取全部参数，
- * 逐项发送给 MCU 并回读校验，确保树莓派和 MCU 使用同一套底盘参数。
+ * 参数表集中描述 MCU 参数编号、名称和合法范围，确保 CLI 与 ROS 使用同一规则。
  */
+#include "small_car_host/chassis_config.hpp"
 
 #include <array>
 #include <chrono>
