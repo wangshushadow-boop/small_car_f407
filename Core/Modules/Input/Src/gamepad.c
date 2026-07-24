@@ -1,3 +1,7 @@
+/**
+ * @file gamepad.c
+ * @brief 实现 USB 手柄状态缓存、连接超时、摇杆整形和底盘命令生成。
+ */
 #include "gamepad.h"
 
 /*

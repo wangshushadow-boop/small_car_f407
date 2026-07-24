@@ -1,3 +1,9 @@
+/**
+ * @file odometry.h
+ * @brief 声明四轮霍尔编码器与 ICM20948 融合里程计接口。
+ *
+ * 模块输出三维位置、姿态、速度和轮速调试信息；比例与融合权重由底盘参数提供。
+ */
 #ifndef ODOMETRY_H_
 #define ODOMETRY_H_
 
@@ -49,6 +55,7 @@
 #define ODOMETRY_GYRO_Z_SIGN 1
 #define ODOMETRY_GYRO_BIAS_SAMPLE_COUNT 100U
 
+/** MCU 对外发布的融合里程计快照，位置 mm、角度 mdeg、时间 ms。 */
 typedef struct {
   uint32_t time_ms;
   int32_t x_mm;
@@ -64,6 +71,7 @@ typedef struct {
   bool wheel_yaw_fused;
 } OdometrySample;
 
+/** 轮速融合调试快照，所有速度和位移单位均为 mm 系列。 */
 typedef struct {
   int16_t left_speed_mm_s;
   int16_t right_speed_mm_s;
@@ -72,14 +80,18 @@ typedef struct {
   int16_t right_delta_mm;
 } OdometryDebug;
 
+/** 清空状态并开始静止陀螺仪零偏标定。 */
 void Odometry_Init(void);
+/** 保留当前标定结果，清零位置、姿态积分和编码器基线。 */
 void Odometry_Reset(void);
+/** 使用同一时刻的 IMU 和四轮编码器样本推进一次融合。 */
 void Odometry_Update(const Icm20948Sample *imu,
                      EncoderSample encoder_a,
                      EncoderSample encoder_b,
                      EncoderSample encoder_c,
                      EncoderSample encoder_d,
                      uint32_t now_ms);
+/** 返回最近一次融合输出和轮速调试数据。 */
 OdometrySample Odometry_GetSample(void);
 OdometryDebug Odometry_GetDebug(void);
 

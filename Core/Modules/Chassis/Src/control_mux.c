@@ -1,3 +1,7 @@
+/**
+ * @file control_mux.c
+ * @brief 实现安全、USB 手柄和树莓派命令的固定优先级仲裁。
+ */
 #include "control_mux.h"
 
 /*
@@ -38,6 +42,7 @@ static void ControlMux_ApplyFrontObstacleLimit(ControlCommand *command)
 
 bool ControlMux_SelectCommand(ControlCommand *command)
 {
+  /* 调用方必须提供输出缓冲区；失败时不访问其他模块。 */
   if (command == NULL)
   {
     return false;

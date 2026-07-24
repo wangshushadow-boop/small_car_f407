@@ -1,3 +1,9 @@
+/**
+ * @file system_status.c
+ * @brief 汇总 IMU、编码器、超声、里程计和控制状态并按节拍上传树莓派。
+ *
+ * 本模块只负责采样调度和遥测分发，不参与底盘控制决策。
+ */
 #include "system_status.h"
 
 /*
@@ -28,6 +34,10 @@
 #define OLED_REPORT_PERIOD_MS 1000U
 #define IMU_REINIT_PERIOD_MS 1000U
 
+/*
+ * 各通道独立记录上次执行时刻。使用无符号减法比较可自然处理
+ * HAL_GetTick() 约 49 天一次的回绕。
+ */
 static uint32_t g_last_chassis_report_tick = 0U;
 static uint32_t g_last_encoder_report_tick = 0U;
 static uint32_t g_last_imu_report_tick = 0U;
@@ -48,6 +58,7 @@ static void ReportToOled(const ControlCommand *command);
 
 void SystemStatus_Init(void)
 {
+  /* 从当前 tick 起算周期，避免启动阶段一次性发送全部遥测。 */
   uint32_t now = HAL_GetTick();
   g_last_chassis_report_tick = now;
   g_last_encoder_report_tick = now;
@@ -69,6 +80,10 @@ void SystemStatus_TaskStep(const ControlCommand *command)
 
   uint32_t now = HAL_GetTick();
 
+  /*
+   * 树莓派可按遥测位图选择需要的二进制数据；编码器、IMU 和里程计函数
+   * 仍按固定周期执行，因为它们同时承担采样、融合和本地可选日志输出。
+   */
   if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_CHASSIS) &&
       ((now - g_last_chassis_report_tick) >= CHASSIS_REPORT_PERIOD_MS))
   {
@@ -110,6 +125,7 @@ void SystemStatus_TaskStep(const ControlCommand *command)
 
 static const char *SourceToText(ControlSource source)
 {
+  /* 文本仅供 OLED 摘要显示，不参与协议编码。 */
   switch (source)
   {
     case CONTROL_SOURCE_HOST:
@@ -129,6 +145,7 @@ static void ReportChassisToHost(const ControlCommand *command)
   UltrasonicSample ultrasonic = {0};
   int16_t ultra_mm = -1;
 
+  /* 无效超声值用 -1 表示，避免与真实的 0 mm 混淆。 */
   if (Ultrasonic_GetSample(&ultrasonic) && ultrasonic.valid)
   {
     ultra_mm = (int16_t)ultrasonic.distance_mm;
@@ -139,6 +156,7 @@ static void ReportChassisToHost(const ControlCommand *command)
 
 static void ReportEncoderToHost(void)
 {
+  /* 一次读取四路快照，保证同一遥测帧中的数据来自同一调度周期。 */
   EncoderSample encoder_a = Encoder_GetSample(MOTOR_A);
   EncoderSample encoder_b = Encoder_GetSample(MOTOR_B);
   EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
@@ -173,6 +191,10 @@ static void ReportImuToHost(void)
 
   if (g_imu_ok)
   {
+    /*
+     * 里程计以 IMU 的 20 ms 节拍更新，并在同一时刻读取四路编码器增量。
+     * 原始 IMU 遥测是否开启，不影响本地融合持续运行。
+     */
     EncoderSample encoder_a = Encoder_GetSample(MOTOR_A);
     EncoderSample encoder_b = Encoder_GetSample(MOTOR_B);
     EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
@@ -203,6 +225,7 @@ static void ReportImuToHost(void)
   }
   else
   {
+    /* 读取失败时限速重试初始化，避免主任务被连续 I2C 初始化占满。 */
     const uint32_t now = HAL_GetTick();
     if ((now - g_last_imu_reinit_tick) >= IMU_REINIT_PERIOD_MS)
     {
@@ -217,6 +240,7 @@ static void ReportImuToHost(void)
 
 static void ReportOdometryToHost(void)
 {
+  /* 主里程计和轮侧调试量分开开关，正常运行时可以关闭高频调试帧。 */
   OdometrySample odometry = Odometry_GetSample();
   OdometryDebug odometry_debug = Odometry_GetDebug();
 
@@ -265,6 +289,7 @@ static void ReportOdometryToHost(void)
 
 static void ReportDeviceToHost(void)
 {
+  /* 设备状态是低频健康摘要，最后一个保留字节当前固定为零。 */
   GamepadState gamepad = {0};
   UltrasonicSample ultrasonic = {0};
 

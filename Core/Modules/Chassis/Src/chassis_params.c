@@ -1,3 +1,7 @@
+/**
+ * @file chassis_params.c
+ * @brief 实现底盘运行参数默认值、编号映射和逐项范围校验。
+ */
 #include "chassis_params.h"
 
 /*
@@ -17,6 +21,12 @@
  */
 static ChassisParams g_params;
 
+/**
+ * @brief 将树莓派下发的 32 位参数安全收窄到指定的 16 位范围。
+ *
+ * 多数运行参数最终参与 16 位控制计算，集中限幅可避免各 case 重复代码，
+ * 同时防止异常配置在类型转换时发生回绕。
+ */
 static int16_t ClampI16Param(int32_t value, int16_t min_value, int16_t max_value)
 {
   if (value < min_value)
@@ -32,6 +42,10 @@ static int16_t ClampI16Param(int32_t value, int16_t min_value, int16_t max_value
 
 void ChassisParams_Init(void)
 {
+  /*
+   * 默认值是 MCU 的独立运行基线。树莓派连接后会从 YAML 批量下发并校验，
+   * 因此这里必须始终保留一组即使没有上位机也能安全工作的参数。
+   */
   g_params.odom_mm_per_tick_num = 2410;
   g_params.gamepad_forward_start = 550;
   g_params.gamepad_reverse_start = 320;
@@ -59,6 +73,10 @@ void ChassisParams_Init(void)
 
 bool ChassisParams_Set(ChassisParamId id, int32_t value)
 {
+  /*
+   * 每个协议参数编号只在这里映射到运行结构体。
+   * 返回 false 表示编号未知或值不满足硬性约束，调用方不得回报设置成功。
+   */
   switch (id)
   {
     case CHASSIS_PARAM_ODOM_MM_PER_TICK_NUM:
@@ -173,6 +191,7 @@ bool ChassisParams_GetValue(ChassisParamId id, int32_t *value)
     return false;
   }
 
+  /* 与 Set 使用同一编号表，供树莓派在下发后逐项读取验证。 */
   switch (id)
   {
     case CHASSIS_PARAM_ODOM_MM_PER_TICK_NUM:
@@ -274,5 +293,6 @@ bool ChassisParams_GetValue(ChassisParamId id, int32_t *value)
 
 ChassisParams ChassisParams_Get(void)
 {
+  /* 返回快照而不是暴露全局变量，业务模块不能绕过校验直接改参数。 */
   return g_params;
 }

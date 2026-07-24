@@ -1,3 +1,7 @@
+/**
+ * @file servo.c
+ * @brief 实现 TIM8 双通道舵机 PWM、脉宽限幅和可选扫动测试。
+ */
 #include "servo.h"
 
 /*

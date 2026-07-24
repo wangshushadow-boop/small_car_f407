@@ -1,3 +1,9 @@
+/**
+ * @file wheel_speed_controller.c
+ * @brief 实现四轮小车左右侧目标速度斜坡、PI 反馈和 PWM 输出。
+ *
+ * 左右侧各使用一个控制器，同侧前后电机共享目标和控制输出。
+ */
 #include "wheel_speed_controller.h"
 
 /*
@@ -17,7 +23,9 @@
 #include "odometry.h"
 
 typedef struct {
+  /* 上位机/运动控制器请求的最终轮侧速度，单位为 mm/s。 */
   int16_t target_mm_s;
+  /* 经加速度限制后的当前控制目标，单位为 mm/s。 */
   int16_t ramped_target_mm_s;
   /* 误差积分保存为 (mm/s)*ms，避免 20 ms 周期下的小误差被整数除法丢失。 */
   int32_t integral_mm_s_ms;
@@ -27,6 +35,7 @@ static WheelControllerState g_left;
 static WheelControllerState g_right;
 static bool g_enabled;
 
+/** @brief 把 32 位中间结果限制到指定 16 位区间。 */
 static int16_t ClampI16(int32_t value, int16_t minimum, int16_t maximum)
 {
   if (value < minimum)
@@ -40,6 +49,7 @@ static int16_t ClampI16(int32_t value, int16_t minimum, int16_t maximum)
   return (int16_t)value;
 }
 
+/** @brief 把 PI 积分等 64 位中间结果限制到指定 32 位区间。 */
 static int32_t ClampI32(int64_t value, int32_t minimum, int32_t maximum)
 {
   if (value < minimum)
@@ -53,6 +63,11 @@ static int32_t ClampI32(int64_t value, int32_t minimum, int32_t maximum)
   return (int32_t)value;
 }
 
+/**
+ * @brief 让当前值以固定步长逼近目标值。
+ *
+ * 该函数实现速度斜坡，保证每个周期最多变化 step，避免目标突变造成起步冲击。
+ */
 static int16_t MoveTowards(int16_t current, int16_t target, int16_t step)
 {
   if (current < target)
@@ -66,6 +81,11 @@ static int16_t MoveTowards(int16_t current, int16_t target, int16_t step)
   return current;
 }
 
+/**
+ * @brief 将同侧两路编码器增量换算为平均轮侧速度。
+ *
+ * sign 参数修正各电机编码器安装方向；标定比例来自运行参数。
+ */
 static int16_t EncoderDeltaToSpeed(int16_t first_delta,
                                    int16_t second_delta,
                                    int16_t first_sign,
@@ -88,6 +108,11 @@ static int16_t EncoderDeltaToSpeed(int16_t first_delta,
   return ClampI16((int32_t)(numerator / denominator), -3000, 3000);
 }
 
+/**
+ * @brief 计算单侧轮组的前馈加 PI 输出。
+ *
+ * 积分项带限幅，并在目标为零时清空，避免停车后保存历史误差。
+ */
 static int16_t ApplyPi(WheelControllerState *state,
                        int16_t measured_mm_s,
                        int16_t output_scale_permille,
@@ -144,6 +169,7 @@ static int16_t ApplyPi(WheelControllerState *state,
 
 void WheelSpeedController_Init(void)
 {
+  /* 结构体整体清零，确保目标、斜坡和积分从确定状态开始。 */
   g_left = (WheelControllerState){0};
   g_right = (WheelControllerState){0};
   g_enabled = false;
@@ -156,6 +182,7 @@ void WheelSpeedController_SetTarget(int16_t left_mm_s, int16_t right_mm_s)
       ClampI16(left_mm_s, -params.max_linear_speed_mm_s, params.max_linear_speed_mm_s);
   const int16_t right_target =
       ClampI16(right_mm_s, -params.max_linear_speed_mm_s, params.max_linear_speed_mm_s);
+  /* 目标归零或方向改变时清积分，防止原方向积分造成反向启动冲击。 */
   if ((left_target == 0) ||
       ((left_target > 0) != (g_left.target_mm_s > 0)))
   {
@@ -181,6 +208,7 @@ void WheelSpeedController_TaskStep(uint32_t dt_ms)
   const ChassisParams params = ChassisParams_Get();
   if (!params.wheel_speed_closed_loop_enabled)
   {
+    /* 调试开环模式仍使用物理速度到 PWM 的线性前馈映射。 */
     const int16_t left_output =
         (int16_t)(((int32_t)g_left.target_mm_s * MOTOR_MAX_SPEED) /
                   params.max_linear_speed_mm_s);
@@ -198,6 +226,7 @@ void WheelSpeedController_TaskStep(uint32_t dt_ms)
       ((int32_t)params.wheel_accel_limit_mm_s2 * (int32_t)dt_ms) / 1000;
   if (ramp_step < 1)
   {
+    /* 很短周期或很低加速度下也至少变化 1 mm/s，避免整数除法停滞。 */
     ramp_step = 1;
   }
   g_left.ramped_target_mm_s =
@@ -205,6 +234,7 @@ void WheelSpeedController_TaskStep(uint32_t dt_ms)
   g_right.ramped_target_mm_s =
       MoveTowards(g_right.ramped_target_mm_s, g_right.target_mm_s, (int16_t)ramp_step);
 
+  /* 读取本周期编码器增量，计算左右侧实测速度。 */
   const EncoderSample encoder_a = Encoder_GetSample(MOTOR_A);
   const EncoderSample encoder_b = Encoder_GetSample(MOTOR_B);
   const EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
@@ -224,6 +254,7 @@ void WheelSpeedController_TaskStep(uint32_t dt_ms)
                           dt_ms,
                           &params);
 
+  /* 同侧前后两个电机共享控制器输出。 */
   const int16_t left_output =
       ApplyPi(&g_left, left_measured, params.wheel_left_output_permille, dt_ms, &params);
   const int16_t right_output =
@@ -236,6 +267,7 @@ void WheelSpeedController_TaskStep(uint32_t dt_ms)
 
 void WheelSpeedController_Stop(void)
 {
+  /* 清除所有闭环历史后再停车，下次启用不会继承旧积分。 */
   g_left = (WheelControllerState){0};
   g_right = (WheelControllerState){0};
   g_enabled = false;

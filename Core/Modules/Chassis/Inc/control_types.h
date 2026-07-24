@@ -1,3 +1,7 @@
+/**
+ * @file control_types.h
+ * @brief 定义手柄、树莓派和安全逻辑之间共享的底盘控制命令类型。
+ */
 #ifndef CONTROL_TYPES_H_
 #define CONTROL_TYPES_H_
 

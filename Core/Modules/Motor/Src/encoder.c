@@ -1,3 +1,9 @@
+/**
+ * @file encoder.c
+ * @brief 实现 TIM1/TIM2/TIM3/TIM4 四路霍尔编码器的周期增量采集。
+ *
+ * 通过 16 位自然回绕差值获得有符号增量，不在中断中进行软件计数。
+ */
 #include "encoder.h"
 
 /*

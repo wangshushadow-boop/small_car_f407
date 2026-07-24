@@ -1,3 +1,9 @@
+/**
+ * @file odometry.c
+ * @brief 实现四轮编码器与 ICM20948 的位置、姿态和航向互补融合。
+ *
+ * 全部累计量使用整数或定点比例，避免 STM32 实时任务依赖高成本双精度运算。
+ */
 #include "odometry.h"
 
 /*
@@ -37,6 +43,7 @@ static float g_roll_rad;
 static float g_pitch_rad;
 static float g_yaw_rad;
 
+/** @brief 将航向角归一化到 [-pi, pi]，便于 ROS 和日志消费。 */
 static float NormalizeYawRad(float yaw_rad)
 {
   while (yaw_rad > ODOMETRY_YAW_WRAP_RAD)
@@ -50,6 +57,7 @@ static float NormalizeYawRad(float yaw_rad)
   return yaw_rad;
 }
 
+/** @brief 饱和转换为 16 位整数，避免速度调试量溢出。 */
 static int16_t ClampI16(int32_t value)
 {
   if (value > INT16_MAX)
@@ -63,17 +71,24 @@ static int16_t ClampI16(int32_t value)
   return (int16_t)value;
 }
 
+/** @brief 按当前标定比例把编码器 tick 换算为毫米。 */
 static float TicksToMm(float ticks, const ChassisParams *params)
 {
   return (ticks * (float)params->odom_mm_per_tick_num) /
          (float)ODOMETRY_MM_PER_TICK_DEN;
 }
 
+/** @brief 按采样间隔把位移换算为速度，结果单位为 mm/s。 */
 static int16_t MmToSpeed(float delta_mm, uint32_t dt_ms)
 {
   return ClampI16((int32_t)lroundf((delta_mm * 1000.0f) / (float)dt_ms));
 }
 
+/**
+ * @brief 修正四路编码器方向，并求出左右两侧的平均位移。
+ *
+ * 同侧两轮取平均可以减小单轮打滑、齿隙和计数抖动的影响。
+ */
 static void GetWheelDelta(EncoderSample encoder_a,
                           EncoderSample encoder_b,
                           EncoderSample encoder_c,
@@ -94,6 +109,7 @@ static void GetWheelDelta(EncoderSample encoder_a,
   *right_mm = TicksToMm(right_ticks, params);
 }
 
+/** @brief 保存轮侧位移和速度，供标定工具输出，不参与主融合结果。 */
 static void UpdateWheelDebug(float left_mm, float right_mm, uint32_t dt_ms)
 {
   g_debug.left_delta_mm = ClampI16((int32_t)lroundf(left_mm));
@@ -105,6 +121,7 @@ static void UpdateWheelDebug(float left_mm, float right_mm, uint32_t dt_ms)
                (int32_t)g_debug.left_speed_mm_s);
 }
 
+/** @brief 扣除零偏并把陀螺仪原始值换算为 rad/s。 */
 static float GyroRateRad(int16_t raw,
                          int16_t bias,
                          int16_t sign,
@@ -116,6 +133,11 @@ static float GyroRateRad(int16_t raw,
   return degrees_per_second * ODOMETRY_DEG_TO_RAD;
 }
 
+/**
+ * @brief 根据重力方向估算横滚角和俯仰角。
+ *
+ * 静态或低动态时加速度计可提供长期参考，运行参数中的安装偏差在此扣除。
+ */
 static void GetAccelAttitude(const Icm20948Sample *imu,
                              const ChassisParams *params,
                              float *roll_rad,
@@ -133,6 +155,7 @@ static void GetAccelAttitude(const Icm20948Sample *imu,
           ODOMETRY_DEG_TO_RAD;
 }
 
+/** @brief 将内部浮点累计状态转换为对外发布的整数单位快照。 */
 static void UpdateSample(float delta_mm,
                          float yaw_rate_rad_s,
                          uint32_t now_ms,
@@ -153,11 +176,13 @@ static void UpdateSample(float delta_mm,
 
 void Odometry_Init(void)
 {
+  /* 初始化和用户请求的里程计重置使用完全相同的状态清理路径。 */
   Odometry_Reset();
 }
 
 void Odometry_Reset(void)
 {
+  /* 同时清零位置、姿态、调试量和陀螺仪零偏标定状态。 */
   g_sample = (OdometrySample){0};
   g_debug = (OdometryDebug){0};
   g_last_update_ms = 0U;
@@ -190,6 +215,7 @@ void Odometry_Update(const Icm20948Sample *imu,
   }
   if (g_last_update_ms == 0U)
   {
+    /* 第一帧只建立时间基准，不能用未知 dt 计算速度或积分姿态。 */
     g_last_update_ms = now_ms;
     g_sample.time_ms = now_ms;
     return;
@@ -272,6 +298,10 @@ void Odometry_Update(const Icm20948Sample *imu,
   g_sample.wheel_yaw_fused = params.wheel_track_mm > 0;
   if (g_sample.wheel_yaw_fused)
   {
+    /*
+     * 差速模型给出低频、无漂移的转角参考，陀螺仪给出平滑的短时变化。
+     * 权重为 0..1000 的千分比，便于通过整数协议在线标定。
+     */
     const float wheel_delta_yaw_rad =
         (right_mm - left_mm) / (float)params.wheel_track_mm;
     const float yaw_gyro_weight =
@@ -299,10 +329,13 @@ void Odometry_Update(const Icm20948Sample *imu,
 
 OdometrySample Odometry_GetSample(void)
 {
+  /* 按值返回一致快照，调用方无法修改模块内部累计状态。 */
   return g_sample;
 }
 
 OdometryDebug Odometry_GetDebug(void)
 {
+  /* 调试快照用于轮距和每 tick 距离标定。 */
   return g_debug;
 }
+  /* 先形成轮侧位移，再用两侧均值作为车体前进距离。 */

@@ -1,3 +1,9 @@
+/**
+ * @file gamepad_servo.c
+ * @brief 实现右摇杆对两自由度云台舵机的增量式控制。
+ *
+ * 摇杆回中后保持当前位置，不会自动把舵机复位到初始脉宽。
+ */
 #include "gamepad_servo.h"
 
 /*

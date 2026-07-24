@@ -1,3 +1,10 @@
+/**
+ * @file oled.c
+ * @brief 实现 SSD1306 兼容 OLED 的 GPIO 串行写入、帧缓冲和 ASCII 绘制。
+ *
+ * 当前板级接口使用 DC、RST、SDA、SCL 四根 GPIO，由软件产生串行时序，
+ * 不占用 STM32 的硬件 I2C 外设。
+ */
 #include "oled.h"
 
 /*
@@ -23,11 +30,13 @@
 
 static uint8_t oled_gram[OLED_WIDTH][OLED_HEIGHT / 8U];
 
+/** @brief 统一写 OLED 接口引脚，隐藏 HAL 的端口参数。 */
 static void Oled_WritePin(uint16_t pin, GPIO_PinState state)
 {
   HAL_GPIO_WritePin(OLED_GPIO_PORT, pin, state);
 }
 
+/** @brief 提供位操作之间的短延时，满足 OLED 串行时钟建立和保持时间。 */
 static void Oled_DelayCycle(void)
 {
   for (volatile uint32_t i = 0; i < 8U; ++i)
@@ -35,6 +44,12 @@ static void Oled_DelayCycle(void)
   }
 }
 
+/**
+ * @brief 以高位在前的顺序向 OLED 写入一个命令或数据字节。
+ *
+ * @param data 要发送的 8 位内容。
+ * @param type OLED_CMD 表示命令，OLED_DATA 表示显存数据。
+ */
 static void Oled_WriteByte(uint8_t data, uint8_t type)
 {
   Oled_WritePin(OLED_DC_PIN, type == OLED_DATA ? GPIO_PIN_SET : GPIO_PIN_RESET);
@@ -52,16 +67,19 @@ static void Oled_WriteByte(uint8_t data, uint8_t type)
   Oled_WritePin(OLED_DC_PIN, GPIO_PIN_SET);
 }
 
+/** @brief 发送一字节控制命令。 */
 static void Oled_WriteCommand(uint8_t command)
 {
   Oled_WriteByte(command, OLED_CMD);
 }
 
+/** @brief 发送一字节显示数据。 */
 static void Oled_WriteData(uint8_t data)
 {
   Oled_WriteByte(data, OLED_DATA);
 }
 
+/** @brief 配置四根 OLED GPIO 并把总线置于空闲高电平。 */
 static void Oled_GPIOInit(void)
 {
   GPIO_InitTypeDef gpio_init = {0};
@@ -80,6 +98,11 @@ static void Oled_GPIOInit(void)
   Oled_WritePin(OLED_SCL_PIN, GPIO_PIN_SET);
 }
 
+/**
+ * @brief 返回字符对应的 5x7 点阵。
+ *
+ * 小写字母统一转换为大写；字库之外的字符返回空白点阵。
+ */
 static const uint8_t *Oled_GetGlyph(char ch)
 {
   static const uint8_t blank[5] = {0x00, 0x00, 0x00, 0x00, 0x00};
@@ -144,6 +167,7 @@ static const uint8_t *Oled_GetGlyph(char ch)
 
 void Oled_Init(void)
 {
+  /* 硬件复位后依次配置时钟、扫描方向、页寻址、对比度和电荷泵。 */
   Oled_GPIOInit();
 
   Oled_WritePin(OLED_RST_PIN, GPIO_PIN_RESET);
@@ -181,6 +205,7 @@ void Oled_Init(void)
 
 void Oled_SetDisplayEnabled(uint8_t enabled)
 {
+  /* 关闭时同时关闭电荷泵，以降低屏幕不使用时的功耗。 */
   if (enabled != 0U)
   {
     Oled_WriteCommand(0x8D);
@@ -197,12 +222,14 @@ void Oled_SetDisplayEnabled(uint8_t enabled)
 
 void Oled_Clear(void)
 {
+  /* 清空 RAM 后立即刷新，保证调用返回时物理屏幕已经变黑。 */
   (void)memset(oled_gram, 0, sizeof(oled_gram));
   Oled_Refresh();
 }
 
 void Oled_Refresh(void)
 {
+  /* SSD1306 每页对应垂直 8 个像素，逐页写入 128 列数据。 */
   for (uint8_t page = 0; page < (OLED_HEIGHT / 8U); ++page)
   {
     Oled_WriteCommand((uint8_t)(0xB0U + page));
@@ -222,6 +249,10 @@ void Oled_DrawPixel(uint8_t x, uint8_t y, uint8_t enabled)
     return;
   }
 
+  /*
+   * 当前模块安装方向与控制器默认坐标相反，因此页号和页内位序都倒置。
+   * 这里完成坐标转换，上层始终使用左上角为原点的屏幕坐标。
+   */
   uint8_t page = (uint8_t)(7U - (y / 8U));
   uint8_t mask = (uint8_t)(1U << (7U - (y % 8U)));
 
@@ -239,6 +270,7 @@ void Oled_ShowChar(uint8_t x, uint8_t y, char ch)
 {
   const uint8_t *glyph = Oled_GetGlyph(ch);
 
+  /* 字形宽 5 列，末尾再清一列作为字符间距。 */
   for (uint8_t column = 0; column < 5U; ++column)
   {
     uint8_t line = glyph[column];
@@ -261,6 +293,7 @@ void Oled_ShowString(uint8_t x, uint8_t y, const char *text)
     return;
   }
 
+  /* 每个字符占 6x8 像素；到达右边界自动换行，超出底部后停止。 */
   while (*text != '\0')
   {
     if (x > (OLED_WIDTH - 6U))
@@ -282,6 +315,7 @@ void Oled_ShowString(uint8_t x, uint8_t y, const char *text)
 
 void Oled_ShowBootScreen(void)
 {
+  /* 启动画面只用于确认屏幕和接口正常，不承载实时系统状态。 */
   Oled_Clear();
   Oled_ShowString(0, 0, "OLED OK");
   Oled_ShowString(0, 10, "C30D V2.2");

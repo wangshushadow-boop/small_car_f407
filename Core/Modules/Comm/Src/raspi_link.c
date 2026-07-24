@@ -1,3 +1,9 @@
+/**
+ * @file raspi_link.c
+ * @brief 实现 USART3 树莓派二进制协议、命令超时、ACK 和按需遥测。
+ *
+ * 接收中断只写入环形缓冲；帧同步、CRC 校验和业务处理均在任务上下文完成。
+ */
 #include "raspi_link.h"
 
 /*

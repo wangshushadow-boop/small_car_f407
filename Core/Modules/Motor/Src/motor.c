@@ -1,3 +1,7 @@
+/**
+ * @file motor.c
+ * @brief 实现 C30D V2.2 四路 H 桥方向 GPIO 与 PWM 定时器映射。
+ */
 #include "motor.h"
 
 /*

@@ -1,3 +1,9 @@
+/**
+ * @file ultrasonic.c
+ * @brief 实现 HC-SR04 类超声模块的非阻塞触发、Echo 计时和超时处理。
+ *
+ * TIM5 提供微秒计时，PD2 EXTI 同时捕获 Echo 上升沿和下降沿；任务函数不忙等。
+ */
 #include "ultrasonic.h"
 
 /*

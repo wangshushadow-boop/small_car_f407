@@ -1,3 +1,9 @@
+/**
+ * @file gamepad_usb.c
+ * @brief 实现 WHEELTEC 无线接收器和 Xbox 风格 USB 手柄的 Host 类驱动。
+ *
+ * 模块完成接口识别、端点轮询和输入报告解码，再把统一状态交给 Gamepad。
+ */
 #include "gamepad_usb.h"
 
 /*

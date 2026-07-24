@@ -1,3 +1,7 @@
+/**
+ * @file debug_uart.c
+ * @brief 实现 USART1 同步调试输出、printf 格式化和分类日志掩码。
+ */
 #include "debug_uart.h"
 
 #include <stdarg.h>
