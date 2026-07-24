@@ -86,16 +86,12 @@ MOTION_FORWARD_SPEED_MPS = min(
 MOTION_REVERSE_SPEED_MPS = min(
     0.6, max(0.0, float(os.getenv("CAR_VOICE_REVERSE_SPEED_MPS", "0.25")))
 )
-MOTION_ANGULAR_SPEED_RAD_S = min(
-    2.0,
-    max(0.0, float(os.getenv("CAR_VOICE_ANGULAR_SPEED_RAD_S", "1.5"))),
-)
-MOTION_DURATION_SECONDS = min(
-    3.0, max(0.1, float(os.getenv("CAR_VOICE_MOTION_DURATION_SECONDS", "1.0")))
-)
-MOTION_RATE_HZ = min(
-    50.0, max(10.0, float(os.getenv("CAR_VOICE_MOTION_RATE_HZ", "20")))
-)
+MOTION_COMMANDS = {
+    "forward": "好的，前进。",
+    "backward": "好的，后退。",
+    "left": "好的，左转。",
+    "right": "好的，右转。",
+}
 
 WAKE_PHRASES = tuple(
     phrase.strip()
@@ -145,92 +141,112 @@ class IntentResult:
 
 
 class RosMotionPublisher:
-  """在独立线程中持续发布限时速度命令，并在超时或退出时停车。"""
+  """调用标准 ROS2 定距/定角 Action，并保留立即停车入口。"""
 
   def __init__(self) -> None:
     import rclpy
     from geometry_msgs.msg import Twist
+    from nav2_msgs.action import DriveOnHeading, Spin
+    from rclpy.action import ActionClient
 
     self._rclpy = rclpy
     self._twist_type = Twist
+    self._drive_type = DriveOnHeading
+    self._spin_type = Spin
     self._rclpy.init(args=None)
     self._node = self._rclpy.create_node("hermes_voice_motion")
-    self._publisher = self._node.create_publisher(Twist, "/cmd_vel", 10)
-    self._condition = threading.Condition()
-    self._linear = 0.0
-    self._angular = 0.0
-    self._deadline = 0.0
+    self._stop_publisher = self._node.create_publisher(Twist, "/cmd_vel", 10)
+    self._drive_client = ActionClient(
+        self._node, DriveOnHeading, "/drive_on_heading"
+    )
+    self._spin_client = ActionClient(self._node, Spin, "/spin")
+    self._goal_handle = None
+    self._done = threading.Event()
     self._shutdown = False
     self._thread = threading.Thread(
-        target=self._publish_loop, name="voice-motion", daemon=True
+        target=self._spin_loop, name="voice-motion-action", daemon=True
     )
     self._thread.start()
 
-  def start(self, linear: float, angular: float) -> None:
-    """启动一个有时间上限的运动；新命令会覆盖尚未结束的旧命令。"""
-    with self._condition:
-      self._linear = linear
-      self._angular = angular
-      self._deadline = time.monotonic() + MOTION_DURATION_SECONDS
-      self._condition.notify_all()
-    LOG.info(
-        "Motion start: linear=%.3f m/s, angular=%.3f rad/s, duration=%.1f s",
-        linear,
-        angular,
-        MOTION_DURATION_SECONDS,
-    )
+  def start(self, action: str, amount: float) -> bool:
+    """发送一个定距或定角目标；amount 分别使用米或弧度。"""
+    if self._goal_handle is not None:
+      self._goal_handle.cancel_goal_async()
+      self._goal_handle = None
+    self._done.clear()
+
+    if action in {"forward", "backward"}:
+      if not self._drive_client.wait_for_server(timeout_sec=2.0):
+        LOG.error("DriveOnHeading action server unavailable")
+        return False
+      goal = self._drive_type.Goal()
+      goal.target.x = abs(amount) if action == "forward" else -abs(amount)
+      goal.speed = (
+          MOTION_FORWARD_SPEED_MPS
+          if action == "forward"
+          else MOTION_REVERSE_SPEED_MPS
+      )
+      goal.time_allowance.sec = 20
+      future = self._drive_client.send_goal_async(goal)
+      future.add_done_callback(self._on_goal_response)
+      LOG.info("Distance action: action=%s distance=%.3f m", action, amount)
+      return True
+
+    if action in {"left", "right"}:
+      if not self._spin_client.wait_for_server(timeout_sec=2.0):
+        LOG.error("Spin action server unavailable")
+        return False
+      goal = self._spin_type.Goal()
+      goal.target_yaw = abs(amount) if action == "left" else -abs(amount)
+      goal.time_allowance.sec = 20
+      future = self._spin_client.send_goal_async(goal)
+      future.add_done_callback(self._on_goal_response)
+      LOG.info("Angle action: action=%s angle=%.3f rad", action, amount)
+      return True
+
+    return False
 
   def stop(self) -> None:
-    """立即清除当前动作并发送零速度。"""
-    with self._condition:
-      self._linear = 0.0
-      self._angular = 0.0
-      self._deadline = 0.0
-      # 在同一把锁内发布停车命令，确保后台线程不会在其后补发旧速度。
-      self._publish(0.0, 0.0)
-      self._condition.notify_all()
+    """取消当前 Action，并通过直接速度入口发送零速度。"""
+    if self._goal_handle is not None:
+      self._goal_handle.cancel_goal_async()
+      self._goal_handle = None
+    self._stop_publisher.publish(self._twist_type())
+    self._done.set()
     LOG.info("Motion stopped")
+
+  def wait(self, timeout: float) -> bool:
+    """等待动作返回，主要供端到端测试命令使用。"""
+    return self._done.wait(timeout)
 
   def close(self) -> None:
     """停车并释放 ROS2 节点。"""
     self.stop()
-    with self._condition:
-      self._shutdown = True
-      self._condition.notify_all()
+    self._shutdown = True
     self._thread.join(timeout=2.0)
     self._node.destroy_node()
     if self._rclpy.ok():
       self._rclpy.shutdown()
 
-  def _publish(self, linear: float, angular: float) -> None:
-    message = self._twist_type()
-    message.linear.x = linear
-    message.angular.z = angular
-    self._publisher.publish(message)
+  def _on_goal_response(self, future: object) -> None:
+    handle = future.result()
+    if not handle.accepted:
+      LOG.error("Motion action rejected")
+      self._done.set()
+      return
+    self._goal_handle = handle
+    result_future = handle.get_result_async()
+    result_future.add_done_callback(self._on_result)
 
-  def _publish_loop(self) -> None:
-    period = 1.0 / MOTION_RATE_HZ
-    was_active = False
-    while True:
-      with self._condition:
-        if self._shutdown:
-          return
-        now = time.monotonic()
-        active = self._deadline > now
-        linear = self._linear if active else 0.0
-        angular = self._angular if active else 0.0
-        if not active and was_active:
-          self._linear = 0.0
-          self._angular = 0.0
-          self._deadline = 0.0
-        if active or was_active:
-          self._publish(linear, angular)
-      if was_active and not active:
-        LOG.info("Motion duration reached; stop command sent")
-      was_active = active
-      self._rclpy.spin_once(self._node, timeout_sec=0.0)
-      with self._condition:
-        self._condition.wait(timeout=period)
+  def _on_result(self, future: object) -> None:
+    wrapped = future.result()
+    LOG.info("Motion action finished: status=%s", wrapped.status)
+    self._goal_handle = None
+    self._done.set()
+
+  def _spin_loop(self) -> None:
+    while not self._shutdown:
+      self._rclpy.spin_once(self._node, timeout_sec=0.1)
 
 
 MOTION_PUBLISHER: RosMotionPublisher | None = None
@@ -248,6 +264,73 @@ def normalize_text(text: str) -> str:
 def contains_phrase(text: str, phrases: tuple[str, ...]) -> bool:
   normalized = normalize_text(text)
   return any(normalize_text(phrase) in normalized for phrase in phrases)
+
+
+def parse_chinese_number(value: str) -> float | None:
+  """解析语音控制常用的简单中文数字，范围覆盖零到九百九十九。"""
+  if value == "半":
+    return 0.5
+  digits = {
+      "零": 0,
+      "一": 1,
+      "二": 2,
+      "两": 2,
+      "三": 3,
+      "四": 4,
+      "五": 5,
+      "六": 6,
+      "七": 7,
+      "八": 8,
+      "九": 9,
+  }
+  if all(character in digits for character in value):
+    result = 0
+    for character in value:
+      result = result * 10 + digits[character]
+    return float(result)
+
+  total = 0
+  current = 0
+  for character in value:
+    if character in digits:
+      current = digits[character]
+    elif character == "十":
+      total += (current or 1) * 10
+      current = 0
+    elif character == "百":
+      total += (current or 1) * 100
+      current = 0
+    else:
+      return None
+  return float(total + current)
+
+
+def parse_motion_amount(text: str, action: str) -> float:
+  """从语句提取米、厘米、毫米或角度，未指定时返回安全默认值。"""
+  match = re.search(
+      r"([0-9]+(?:\.[0-9]+)?|[零一二两三四五六七八九十百半]+)"
+      r"\s*(厘米|公分|毫米|米|度)",
+      text,
+  )
+  if match is None:
+    return 0.5 if action in {"forward", "backward"} else 1.5707963268
+
+  token, unit = match.groups()
+  try:
+    number = float(token)
+  except ValueError:
+    parsed = parse_chinese_number(token)
+    if parsed is None:
+      return 0.5 if action in {"forward", "backward"} else 1.5707963268
+    number = parsed
+
+  if unit in {"厘米", "公分"}:
+    return number / 100.0
+  if unit == "毫米":
+    return number / 1000.0
+  if unit == "度":
+    return number * 3.141592653589793 / 180.0
+  return number
 
 
 def is_vision_request(text: str) -> bool:
@@ -328,7 +411,13 @@ def match_local_intent(text: str) -> IntentResult | None:
     for action, phrases in motion_phrases:
       if any(phrase in normalized for phrase in phrases):
         return IntentResult(
-            "motion.command", 1.0, {"action": action}, "local_rule"
+            "motion.command",
+            1.0,
+            {
+                "action": action,
+                "amount": parse_motion_amount(text, action),
+            },
+            "local_rule",
         )
 
   music_words = ("音乐", "歌曲", "歌", "萱草花", "播放")
@@ -791,22 +880,19 @@ def process_user_turn(
       speak("运动指令没有通过本地安全规则。")
       return session_id, False
     action = str(intent.slots.get("action", "stop"))
-    commands = {
-        "forward": (MOTION_FORWARD_SPEED_MPS, 0.0, "好的，前进。"),
-        "backward": (-MOTION_REVERSE_SPEED_MPS, 0.0, "好的，后退。"),
-        "left": (0.0, MOTION_ANGULAR_SPEED_RAD_S, "好的，左转。"),
-        "right": (0.0, -MOTION_ANGULAR_SPEED_RAD_S, "好的，右转。"),
-    }
     if action == "stop":
       MOTION_PUBLISHER.stop()
       speak("已停车。")
       return session_id, False
-    command = commands.get(action)
+    command = MOTION_COMMANDS.get(action)
     if command is None:
       speak("这个运动指令还不支持。")
       return session_id, False
-    MOTION_PUBLISHER.start(command[0], command[1])
-    speak(command[2])
+    amount = float(intent.slots.get("amount", parse_motion_amount(text, action)))
+    if not MOTION_PUBLISHER.start(action, amount):
+      speak("运动控制节点暂时不可用。")
+      return session_id, False
+    speak(command)
     return session_id, False
   if intent.name == "navigation.request":
     speak("目前只支持前进、后退、左转、右转和停止。")
@@ -921,7 +1007,53 @@ def main() -> int:
   return 0
 
 
+def run_motion_test(text: str) -> int:
+  """使用正式意图规则和 ROS Action 执行一次定距或定角动作。"""
+  global MOTION_PUBLISHER
+
+  logging.basicConfig(
+      level=os.getenv("CAR_VOICE_LOG_LEVEL", "INFO"),
+      format="%(asctime)s %(levelname)s %(message)s",
+  )
+  intent = route_intent(text)
+  if intent.name != "motion.command" or intent.source != "local_rule":
+    LOG.error("Motion test rejected: text=%s intent=%s", text, intent.name)
+    return 1
+
+  action = str(intent.slots.get("action", "stop"))
+  command = MOTION_COMMANDS.get(action)
+  try:
+    MOTION_PUBLISHER = RosMotionPublisher()
+    if action == "stop":
+      MOTION_PUBLISHER.stop()
+    elif command is not None:
+      amount = float(
+          intent.slots.get("amount", parse_motion_amount(text, action))
+      )
+      LOG.info(
+          "Motion test: text=%s action=%s amount=%.3f",
+          text,
+          action,
+          amount,
+      )
+      if not MOTION_PUBLISHER.start(action, amount):
+        return 1
+      if not MOTION_PUBLISHER.wait(25.0):
+        LOG.error("Motion test timeout")
+        return 1
+    else:
+      LOG.error("Unsupported motion test action: %s", action)
+      return 1
+  finally:
+    if MOTION_PUBLISHER is not None:
+      MOTION_PUBLISHER.close()
+      MOTION_PUBLISHER = None
+  return 0
+
+
 if __name__ == "__main__":
+  if len(sys.argv) >= 3 and sys.argv[1] == "--test-motion":
+    raise SystemExit(run_motion_test(" ".join(sys.argv[2:])))
   if len(sys.argv) >= 3 and sys.argv[1] == "--classify-intent":
     classified = route_intent(" ".join(sys.argv[2:]))
     print(

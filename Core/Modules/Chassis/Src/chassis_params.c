@@ -40,13 +40,21 @@ void ChassisParams_Init(void)
   g_params.gamepad_turn_max = 850;
   g_params.ultra_near_distance_mm = 200;
   g_params.gyro_lsb_per_dps_x10 = 164;
-  g_params.wheel_track_mm = 0;
+  g_params.wheel_track_mm = 115;
   g_params.yaw_gyro_weight_permille = 900;
   g_params.attitude_gyro_weight_permille = 980;
   g_params.imu_roll_offset_mdeg = 0;
   g_params.imu_pitch_offset_mdeg = 0;
   g_params.max_linear_speed_mm_s = 600;
   g_params.max_angular_speed_mrad_s = 2000;
+  g_params.wheel_speed_closed_loop_enabled = true;
+  g_params.wheel_speed_kp_x100 = 50;
+  g_params.wheel_speed_ki_x100 = 20;
+  g_params.wheel_speed_integral_limit = 1000;
+  g_params.wheel_accel_limit_mm_s2 = 500;
+  g_params.wheel_pwm_min = 550;
+  g_params.wheel_left_output_permille = 1000;
+  g_params.wheel_right_output_permille = 1000;
 }
 
 bool ChassisParams_Set(ChassisParamId id, int32_t value)
@@ -115,6 +123,42 @@ bool ChassisParams_Set(ChassisParamId id, int32_t value)
 
     case CHASSIS_PARAM_MAX_ANGULAR_SPEED_MRAD_S:
       g_params.max_angular_speed_mrad_s = ClampI16Param(value, 100, 10000);
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_SPEED_CLOSED_LOOP_ENABLED:
+      if ((value != 0) && (value != 1))
+      {
+        return false;
+      }
+      g_params.wheel_speed_closed_loop_enabled = value != 0;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_SPEED_KP_X100:
+      g_params.wheel_speed_kp_x100 = ClampI16Param(value, 0, 1000);
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_SPEED_KI_X100:
+      g_params.wheel_speed_ki_x100 = ClampI16Param(value, 0, 1000);
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_SPEED_INTEGRAL_LIMIT:
+      g_params.wheel_speed_integral_limit = ClampI16Param(value, 0, 10000);
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_ACCEL_LIMIT_MM_S2:
+      g_params.wheel_accel_limit_mm_s2 = ClampI16Param(value, 50, 5000);
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_PWM_MIN:
+      g_params.wheel_pwm_min = ClampI16Param(value, 0, 1000);
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_LEFT_OUTPUT_PERMILLE:
+      g_params.wheel_left_output_permille = ClampI16Param(value, 500, 1500);
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_RIGHT_OUTPUT_PERMILLE:
+      g_params.wheel_right_output_permille = ClampI16Param(value, 500, 1500);
       return true;
 
     default:
@@ -189,6 +233,38 @@ bool ChassisParams_GetValue(ChassisParamId id, int32_t *value)
 
     case CHASSIS_PARAM_MAX_ANGULAR_SPEED_MRAD_S:
       *value = g_params.max_angular_speed_mrad_s;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_SPEED_CLOSED_LOOP_ENABLED:
+      *value = g_params.wheel_speed_closed_loop_enabled ? 1 : 0;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_SPEED_KP_X100:
+      *value = g_params.wheel_speed_kp_x100;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_SPEED_KI_X100:
+      *value = g_params.wheel_speed_ki_x100;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_SPEED_INTEGRAL_LIMIT:
+      *value = g_params.wheel_speed_integral_limit;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_ACCEL_LIMIT_MM_S2:
+      *value = g_params.wheel_accel_limit_mm_s2;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_PWM_MIN:
+      *value = g_params.wheel_pwm_min;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_LEFT_OUTPUT_PERMILLE:
+      *value = g_params.wheel_left_output_permille;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_RIGHT_OUTPUT_PERMILLE:
+      *value = g_params.wheel_right_output_permille;
       return true;
 
     default:

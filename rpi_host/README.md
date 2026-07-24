@@ -40,6 +40,7 @@ STM32F407 MCU 负责电机、舵机、编码器、IMU、超声等底层实时任
 | chassis | 负责读取底盘标定参数，并将参数批量下发到 MCU。 |
 | audio | 封装 USB 麦克风和音响的基础录放能力。 |
 | smallcar_ros_and_mcu_bridge | ROS2 与 MCU 的桥接节点，负责话题、服务、TF 和串口协议之间的转换。 |
+| small_car_motion_controller | 统一处理直接速度、定距和定角控制，再将唯一的最终速度发送给 MCU bridge。 |
 | small_car_description | 小车 URDF/Xacro 描述包，负责 RViz 模型显示和固定 TF 关系。 |
 
 ## 调试工具
@@ -57,12 +58,19 @@ STM32F407 MCU 负责电机、舵机、编码器、IMU、超声等底层实时任
 
 | 接口 | 类型 | 方向 | 说明 |
 | --- | --- | --- | --- |
-| /cmd_vel | geometry_msgs/msg/Twist | 订阅 | 接收上位机或算法节点的底盘速度控制。 |
+| /cmd_vel | geometry_msgs/msg/Twist | 订阅 | 运动控制入口；接收遥控、导航或算法节点的速度命令。 |
+| /cmd_vel_mcu | geometry_msgs/msg/Twist | 内部 | 运动控制器仲裁并平滑后的唯一 MCU 速度入口。 |
 | /odom | nav_msgs/msg/Odometry | 发布 | 发布 MCU 融合后的三维里程计。 |
-| /imu/data_raw | sensor_msgs/msg/Imu | 发布 | 发布 ICM20948 原始加速度和角速度，不包含姿态。 |
 | /imu/data | sensor_msgs/msg/Imu | 发布 | 发布带 MCU 姿态结果的 IMU 数据。 |
+| /imu/data_raw | sensor_msgs/msg/Imu | 可选发布 | 原始加速度和角速度；默认关闭，标定 IMU 时开启。 |
 | /ultrasonic/front | sensor_msgs/msg/Range | 发布 | 发布前向超声距离。 |
-| /joint_states | sensor_msgs/msg/JointState | 发布 | 发布四轮和两路舵机的关节状态。 |
+| /joint_states | sensor_msgs/msg/JointState | 可选发布 | 四轮和两路舵机状态；关闭后 MCU 不上传轮速调试流。 |
 | /diagnostics | diagnostic_msgs/msg/DiagnosticArray | 发布 | 发布手柄、IMU、超声和 MCU 状态诊断。 |
+| /control/source | std_msgs/msg/UInt8 | 内部发布 | 当前控制源发生变化时发布，用于手柄优先级仲裁。 |
 | /servo_controller/joint_trajectory | trajectory_msgs/msg/JointTrajectory | 订阅 | 接收两路舵机的目标位置。 |
 | /reset_odometry | std_srvs/srv/Empty | 服务 | 清零 MCU 里程计。 |
+| /drive_on_heading | nav2_msgs/action/DriveOnHeading | Action | 按里程计闭环行驶指定距离。 |
+| /spin | nav2_msgs/action/Spin | Action | 按里程计闭环旋转指定角度。 |
+
+ROS2 底盘命令固定沿 `/cmd_vel -> small_car_motion_controller -> /cmd_vel_mcu -> bridge -> MCU`
+流动，算法节点不得直接向 `/cmd_vel_mcu` 发布。

@@ -20,6 +20,14 @@ typedef enum {
   CHASSIS_PARAM_IMU_PITCH_OFFSET_MDEG = 13,
   CHASSIS_PARAM_MAX_LINEAR_SPEED_MM_S = 14,
   CHASSIS_PARAM_MAX_ANGULAR_SPEED_MRAD_S = 15,
+  CHASSIS_PARAM_WHEEL_SPEED_CLOSED_LOOP_ENABLED = 16,
+  CHASSIS_PARAM_WHEEL_SPEED_KP_X100 = 17,
+  CHASSIS_PARAM_WHEEL_SPEED_KI_X100 = 18,
+  CHASSIS_PARAM_WHEEL_SPEED_INTEGRAL_LIMIT = 19,
+  CHASSIS_PARAM_WHEEL_ACCEL_LIMIT_MM_S2 = 20,
+  CHASSIS_PARAM_WHEEL_PWM_MIN = 21,
+  CHASSIS_PARAM_WHEEL_LEFT_OUTPUT_PERMILLE = 22,
+  CHASSIS_PARAM_WHEEL_RIGHT_OUTPUT_PERMILLE = 23,
 } ChassisParamId;
 
 typedef struct {
@@ -38,6 +46,14 @@ typedef struct {
   int16_t imu_pitch_offset_mdeg;
   int16_t max_linear_speed_mm_s;
   int16_t max_angular_speed_mrad_s;
+  bool wheel_speed_closed_loop_enabled;
+  int16_t wheel_speed_kp_x100;
+  int16_t wheel_speed_ki_x100;
+  int16_t wheel_speed_integral_limit;
+  int16_t wheel_accel_limit_mm_s2;
+  int16_t wheel_pwm_min;
+  int16_t wheel_left_output_permille;
+  int16_t wheel_right_output_permille;
 } ChassisParams;
 
 void ChassisParams_Init(void);

@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>small_car_motion_controller</name>
+  <version>0.1.0</version>
+  <description>小车速度仲裁、定距直行和定角转向控制节点。</description>
+  <maintainer email="small-car@example.com">small_car</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>geometry_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

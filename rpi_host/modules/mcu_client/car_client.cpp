@@ -51,6 +51,10 @@ bool CarClient::SendParamGet(std::uint8_t param_id) {
   return SendBytes(codec_.ParamGet(param_id));
 }
 
+bool CarClient::SendTelemetryConfig(std::uint16_t mask) {
+  return SendBytes(codec_.TelemetryConfig(mask));
+}
+
 void CarClient::Poll() {
   // 上位机主循环应周期调用 Poll()。这里一次最多读 256 字节，
   // FrameParser 会自动处理半包、粘包和噪声。

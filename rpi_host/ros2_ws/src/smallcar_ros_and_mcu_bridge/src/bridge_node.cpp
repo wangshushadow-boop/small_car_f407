@@ -21,6 +21,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <sensor_msgs/msg/range.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 #include <std_srvs/srv/empty.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
@@ -81,6 +82,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     OpenController();
     CreateRosInterfaces();
     ApplyControllerConfig();
+    ConfigureTelemetry();
     RCLCPP_INFO(get_logger(), "ROS2 bridge ready: %s @ %d", serial_port_.c_str(),
                 baud_rate_);
   }
@@ -107,6 +109,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     declare_parameter<std::string>("serial_port", "/dev/small_car_mcu");
     declare_parameter<int>("baud_rate", 115200);
     declare_parameter<std::string>("chassis_config", "");
+    declare_parameter<std::string>("cmd_vel_topic", "cmd_vel_mcu");
     declare_parameter<double>("max_linear_speed_mps", 0.6);
     declare_parameter<double>("max_angular_speed_rad_s", 2.0);
     declare_parameter<int>("cmd_vel_timeout_ms", 500);
@@ -119,6 +122,8 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     declare_parameter<std::string>("imu_frame", "imu_link");
     declare_parameter<std::string>("ultrasonic_frame", "ultrasonic_link");
     declare_parameter<bool>("publish_tf", true);
+    declare_parameter<bool>("publish_imu_raw", false);
+    declare_parameter<bool>("publish_joint_states", true);
     declare_parameter<double>("wheel_radius_m", 0.0325);
     declare_parameter<double>("ultrasonic_min_range_m", 0.02);
     declare_parameter<double>("ultrasonic_max_range_m", 4.0);
@@ -147,6 +152,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     serial_port_ = get_parameter("serial_port").as_string();
     baud_rate_ = static_cast<int>(get_parameter("baud_rate").as_int());
     chassis_config_ = get_parameter("chassis_config").as_string();
+    cmd_vel_topic_ = get_parameter("cmd_vel_topic").as_string();
     if (chassis_config_.empty()) {
       chassis_config_ =
           ament_index_cpp::get_package_share_directory("smallcar_ros_and_mcu_bridge") +
@@ -163,6 +169,8 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     imu_frame_ = get_parameter("imu_frame").as_string();
     ultrasonic_frame_ = get_parameter("ultrasonic_frame").as_string();
     publish_tf_ = get_parameter("publish_tf").as_bool();
+    publish_imu_raw_ = get_parameter("publish_imu_raw").as_bool();
+    publish_joint_states_ = get_parameter("publish_joint_states").as_bool();
     wheel_radius_m_ = get_parameter("wheel_radius_m").as_double();
     ultra_min_m_ = get_parameter("ultrasonic_min_range_m").as_double();
     ultra_max_m_ = get_parameter("ultrasonic_max_range_m").as_double();
@@ -225,19 +233,26 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
 
   void CreateRosInterfaces() {
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("odom", 10);
-    imu_raw_pub_ = create_publisher<sensor_msgs::msg::Imu>(
-        "imu/data_raw", rclcpp::SensorDataQoS());
+    if (publish_imu_raw_) {
+      imu_raw_pub_ = create_publisher<sensor_msgs::msg::Imu>(
+          "imu/data_raw", rclcpp::SensorDataQoS());
+    }
     imu_pub_ = create_publisher<sensor_msgs::msg::Imu>(
         "imu/data", rclcpp::SensorDataQoS());
     range_pub_ = create_publisher<sensor_msgs::msg::Range>(
         "ultrasonic/front", rclcpp::SensorDataQoS());
-    joint_pub_ = create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
+    if (publish_joint_states_) {
+      joint_pub_ =
+          create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
+    }
     diagnostics_pub_ =
         create_publisher<diagnostic_msgs::msg::DiagnosticArray>("diagnostics", 10);
+    control_source_pub_ = create_publisher<std_msgs::msg::UInt8>(
+        "control/source", rclcpp::QoS(1).reliable().transient_local());
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
     cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
-        "cmd_vel", 10,
+        cmd_vel_topic_, 10,
         std::bind(&SmallcarRosAndMcuBridge::OnCmdVel, this, std::placeholders::_1));
     servo_sub_ = create_subscription<trajectory_msgs::msg::JointTrajectory>(
         "servo_controller/joint_trajectory", 10,
@@ -255,6 +270,18 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     command_timer_ = create_wall_timer(
         std::chrono::duration_cast<std::chrono::nanoseconds>(period),
         std::bind(&SmallcarRosAndMcuBridge::MaintainCommand, this));
+  }
+
+  void ConfigureTelemetry() {
+    std::uint16_t mask =
+        small_car::kTelemetryChassis | small_car::kTelemetryImu |
+        small_car::kTelemetryDevice | small_car::kTelemetryOdometry;
+    if (publish_joint_states_) {
+      mask |= small_car::kTelemetryOdometryDebug;
+    }
+    if (!client_.SendTelemetryConfig(mask)) {
+      RCLCPP_WARN(get_logger(), "failed to configure MCU telemetry");
+    }
   }
 
   void OnCmdVel(const geometry_msgs::msg::Twist::SharedPtr message) {
@@ -344,7 +371,9 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
     }
     if (found) {
       client_.SendServo(ServoPulse(left_servo_), ServoPulse(right_servo_));
-      PublishJointState(now());
+      if (publish_joint_states_) {
+        PublishJointState(now());
+      }
     }
   }
 
@@ -453,7 +482,9 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
       raw.linear_acceleration_covariance[index] = imu_acceleration_variance_;
       raw.angular_velocity_covariance[index] = imu_angular_velocity_variance_;
     }
-    imu_raw_pub_->publish(raw);
+    if (publish_imu_raw_) {
+      imu_raw_pub_->publish(raw);
+    }
 
     if (latest_odom_.has_value()) {
       auto fused = raw;
@@ -471,6 +502,12 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
       return;
     }
     last_chassis_time_ms_ = value->mcu_time_ms;
+    if (value->source != last_control_source_) {
+      std_msgs::msg::UInt8 source;
+      source.data = value->source;
+      control_source_pub_->publish(source);
+      last_control_source_ = value->source;
+    }
     if (value->ultra_mm < 0) {
       return;
     }
@@ -486,6 +523,9 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   }
 
   void PublishWheels() {
+    if (!publish_joint_states_) {
+      return;
+    }
     const auto value = client_.GetOdometryDebug();
     if (!value.has_value() || value->mcu_time_ms == last_odom_debug_time_ms_) {
       return;
@@ -585,6 +625,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   small_car::CarClient client_;
   std::string serial_port_;
   std::string chassis_config_;
+  std::string cmd_vel_topic_ = "cmd_vel_mcu";
   std::string odom_frame_;
   std::string base_frame_;
   std::string imu_frame_;
@@ -607,6 +648,8 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   double left_wheel_position_rad_ = 0.0;
   double right_wheel_position_rad_ = 0.0;
   bool publish_tf_ = true;
+  bool publish_imu_raw_ = false;
+  bool publish_joint_states_ = true;
   std::chrono::milliseconds cmd_vel_timeout_{500};
   std::chrono::milliseconds idle_heartbeat_interval_{1000};
   std::chrono::seconds recovery_request_cooldown_{30};
@@ -626,6 +669,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   std::uint32_t last_chassis_time_ms_ = UINT32_MAX;
   std::uint32_t last_odom_debug_time_ms_ = UINT32_MAX;
   std::uint32_t last_device_time_ms_ = UINT32_MAX;
+  std::uint8_t last_control_source_ = UINT8_MAX;
   std::optional<small_car::Odometry> latest_odom_;
   std::optional<small_car::OdometryDebug> latest_odom_debug_;
 
@@ -635,6 +679,7 @@ class SmallcarRosAndMcuBridge : public rclcpp::Node {
   rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr range_pub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
+  rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr control_source_pub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
   rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr servo_sub_;
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr reset_odom_service_;

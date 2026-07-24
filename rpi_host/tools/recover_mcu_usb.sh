@@ -57,13 +57,14 @@ container_id="$(
     ps -q small_car_ros2
 )"
 for _ in {1..30}; do
-  if docker logs "${container_id}" 2>&1 |
-      grep -q "applied and verified 15 chassis parameters"; then
-    echo "[MCU-RECOVERY] completed and MCU link verified"
+  container_logs="$(docker logs "${container_id}" 2>&1 || true)"
+  if grep -Eq "applied and verified [0-9]+ chassis parameters" <<<"${container_logs}" &&
+      grep -q "Voice daemon ready" <<<"${container_logs}"; then
+    echo "[MCU-RECOVERY] completed; MCU and voice links verified"
     exit 0
   fi
   sleep 1
 done
 
-echo "[MCU-RECOVERY] container started but MCU link verification timed out" >&2
+echo "[MCU-RECOVERY] MCU or voice link verification timed out" >&2
 exit 1

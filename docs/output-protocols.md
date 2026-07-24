@@ -111,13 +111,14 @@ AA 55 | VER | MSG | SEQ | LEN | PAYLOAD... | CRC16
 | 树莓派 -> MCU | `0x02` | 舵机命令 | 20-50Hz | 8 | 是，`host_time_ms` | 下发两路PWM舵机目标脉宽 |
 | 树莓派 -> MCU | `0x03` | 心跳/时间同步 | 1-10Hz | 4 | 是，`host_time_ms` | 保活，后续可用于估算时钟偏差 |
 | 树莓派 -> MCU | `0x04` | 参数/标定命令 | 低频 | 5/6/10 | 是，`host_time_ms` | 里程计清零、运行时参数读取和设置 |
+| 树莓派 -> MCU | `0x05` | 遥测订阅 | 启动时 | 2 | 否 | 通过位掩码选择 MCU 需要上传的数据流 |
 | MCU -> 树莓派 | `0x81` | 底盘状态 | 20-50Hz | 13 | 是，`mcu_time_ms` | 上报控制源、命令单位、执行命令和超声距离 |
 | MCU -> 树莓派 | `0x82` | 编码器增量 | 50Hz | 12 | 是，`mcu_time_ms` | 上报四路编码器增量 |
 | MCU -> 树莓派 | `0x83` | IMU原始数据 | 50-100Hz | 16 | 是，`mcu_time_ms` | 上报IMU加速度和陀螺仪原始值 |
 | MCU -> 树莓派 | `0x84` | 设备状态 | 1Hz | 8 | 是，`mcu_time_ms` | 上报手柄、传感器和错误状态 |
 | MCU -> 树莓派 | `0x85` | ACK/错误 | 按需 | 3 | 否 | 回复命令处理结果 |
 | MCU -> 树莓派 | `0x86` | 里程计融合 | 50Hz | 40 | 是，`mcu_time_ms` | 上报三维位置、姿态、速度和标定状态 |
-| MCU -> 树莓派 | `0x87` | 里程计调试 | 50Hz | 14 | 是，`mcu_time_ms` | 上报左右轮速度和差速，用于标定 |
+| MCU -> 树莓派 | `0x87` | 里程计调试 | 20Hz，可关闭 | 14 | 是，`mcu_time_ms` | 上报左右轮速度和差速，用于关节状态和标定 |
 | MCU -> 树莓派 | `0x88` | 参数返回 | 按需 | 9 | 是，`mcu_time_ms` | 返回运行时参数当前值 |
 
 ### 下行 Payload：树莓派 -> MCU
@@ -142,6 +143,7 @@ AA 55 | VER | MSG | SEQ | LEN | PAYLOAD... | CRC16
 | `0x04` | 参数设置 | `op` | 4 | `u8` | `1` | 设置运行时参数 |
 | `0x04` | 参数设置 | `param_id` | 5 | `u8` | 见参数ID表 | 要设置的参数编号 |
 | `0x04` | 参数设置 | `value` | 6 | `i32` | 见参数ID表 | 参数值 |
+| `0x05` | 遥测订阅 | `telemetry_mask` | 0 | `u16` | 位掩码 | 选择需要周期上传的数据流 |
 
 ### 上行 Payload：MCU -> 树莓派
 
@@ -209,6 +211,12 @@ AA 55 | VER | MSG | SEQ | LEN | PAYLOAD... | CRC16
 | 参数操作 `op` | `1` | `SET` | 设置运行时参数；旧工具中也兼容为里程计清零 |
 | 参数操作 `op` | `2` | `GET` | 读取运行时参数 |
 | 参数操作 `op` | `3` | `ODOM_RESET` | 清零里程计并重新校准陀螺仪零偏 |
+| 遥测位 | `bit0` | `CHASSIS` | 底盘控制源和超声状态 |
+| 遥测位 | `bit1` | `ENCODER` | 四路原始编码器增量，仅调试时开启 |
+| 遥测位 | `bit2` | `IMU` | IMU 原始采样，供 ROS 融合消息使用 |
+| 遥测位 | `bit3` | `DEVICE` | 手柄和传感器健康状态 |
+| 遥测位 | `bit4` | `ODOMETRY` | 融合里程计 |
+| 遥测位 | `bit5` | `ODOMETRY_DEBUG` | 左右轮速度，供关节状态和标定使用 |
 | 参数ID `param_id` | `1` | `ODOM_MM_PER_TICK_NUM` | 里程计每tick毫米比例的分子，分母固定为15600 |
 | 参数ID `param_id` | `2` | `GAMEPAD_FORWARD_START` | 手柄前进起步输出 |
 | 参数ID `param_id` | `3` | `GAMEPAD_REVERSE_START` | 手柄后退起步输出 |
@@ -224,6 +232,14 @@ AA 55 | VER | MSG | SEQ | LEN | PAYLOAD... | CRC16
 | 参数ID `param_id` | `13` | `IMU_PITCH_OFFSET_MDEG` | IMU安装俯仰偏置，单位mdeg |
 | 参数ID `param_id` | `14` | `MAX_LINEAR_SPEED_MM_S` | ROS 线速度上限，单位 mm/s |
 | 参数ID `param_id` | `15` | `MAX_ANGULAR_SPEED_MRAD_S` | ROS 角速度上限，单位 mrad/s |
+| 参数ID `param_id` | `16` | `WHEEL_SPEED_CLOSED_LOOP_ENABLED` | 树莓派物理速度命令是否启用左右轮闭环 |
+| 参数ID `param_id` | `17` | `WHEEL_SPEED_KP_X100` | 轮速比例系数乘以 100 |
+| 参数ID `param_id` | `18` | `WHEEL_SPEED_KI_X100` | 轮速积分系数乘以 100 |
+| 参数ID `param_id` | `19` | `WHEEL_SPEED_INTEGRAL_LIMIT` | 轮速积分项限幅 |
+| 参数ID `param_id` | `20` | `WHEEL_ACCEL_LIMIT_MM_S2` | 目标轮速加速度限制，单位 mm/s² |
+| 参数ID `param_id` | `21` | `WHEEL_PWM_MIN` | 电机克服静摩擦所需的最低有效 PWM |
+| 参数ID `param_id` | `22` | `WHEEL_LEFT_OUTPUT_PERMILLE` | 左侧电机输出补偿，1000 表示不缩放 |
+| 参数ID `param_id` | `23` | `WHEEL_RIGHT_OUTPUT_PERMILLE` | 右侧电机输出补偿，1000 表示不缩放 |
 | ACK结果 `result` | `0` | `OK` | 命令处理成功 |
 | ACK结果 `result` | `1` | `CRC_ERROR` | CRC错误 |
 | ACK结果 `result` | `2` | `LEN_ERROR` | 长度错误 |
@@ -245,11 +261,12 @@ AA 55 | VER | MSG | SEQ | LEN | PAYLOAD... | CRC16
 | 消息 | 周期 | 单帧长度估算 | 数据量估算 |
 | --- | ---: | ---: | ---: |
 | `0x81` 底盘状态 | 20Hz | 20字节 | 约 400B/s |
-| `0x82` 编码器增量 | 50Hz | 20字节 | 约 1000B/s |
+| `0x82` 编码器增量 | 默认关闭 | 20字节 | 0B/s |
 | `0x83` IMU原始数据 | 50Hz | 24字节 | 约 1200B/s |
 | `0x86` 2.5D里程计融合 | 50Hz | 48字节 | 约 2400B/s |
+| `0x87` 里程计调试 | 20Hz，可关闭 | 22字节 | 约 440B/s |
 | `0x84` 设备状态 | 1Hz | 16字节 | 可忽略 |
-| 合计 | - | - | 约 5.4KB/s |
+| 默认合计 | - | - | 约 4.5KB/s |
 
 115200 8N1 的实际可用吞吐约 10KB/s 左右，上述配置有余量。
 

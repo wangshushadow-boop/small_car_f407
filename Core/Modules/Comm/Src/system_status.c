@@ -23,6 +23,7 @@
 #define ENCODER_REPORT_PERIOD_MS 20U
 #define IMU_REPORT_PERIOD_MS 20U
 #define ODOMETRY_REPORT_PERIOD_MS 20U
+#define ODOMETRY_DEBUG_REPORT_PERIOD_MS 50U
 #define DEVICE_REPORT_PERIOD_MS 1000U
 #define OLED_REPORT_PERIOD_MS 1000U
 #define IMU_REINIT_PERIOD_MS 1000U
@@ -31,6 +32,7 @@ static uint32_t g_last_chassis_report_tick = 0U;
 static uint32_t g_last_encoder_report_tick = 0U;
 static uint32_t g_last_imu_report_tick = 0U;
 static uint32_t g_last_odometry_report_tick = 0U;
+static uint32_t g_last_odometry_debug_report_tick = 0U;
 static uint32_t g_last_device_report_tick = 0U;
 static uint32_t g_last_oled_report_tick = 0U;
 static uint32_t g_last_imu_reinit_tick = 0U;
@@ -51,6 +53,7 @@ void SystemStatus_Init(void)
   g_last_encoder_report_tick = now;
   g_last_imu_report_tick = now;
   g_last_odometry_report_tick = now;
+  g_last_odometry_debug_report_tick = now;
   g_last_device_report_tick = now;
   g_last_oled_report_tick = now;
   g_last_imu_reinit_tick = now;
@@ -66,7 +69,8 @@ void SystemStatus_TaskStep(const ControlCommand *command)
 
   uint32_t now = HAL_GetTick();
 
-  if ((now - g_last_chassis_report_tick) >= CHASSIS_REPORT_PERIOD_MS)
+  if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_CHASSIS) &&
+      ((now - g_last_chassis_report_tick) >= CHASSIS_REPORT_PERIOD_MS))
   {
     g_last_chassis_report_tick = now;
     ReportChassisToHost(command);
@@ -90,7 +94,8 @@ void SystemStatus_TaskStep(const ControlCommand *command)
     ReportOdometryToHost();
   }
 
-  if ((now - g_last_device_report_tick) >= DEVICE_REPORT_PERIOD_MS)
+  if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_DEVICE) &&
+      ((now - g_last_device_report_tick) >= DEVICE_REPORT_PERIOD_MS))
   {
     g_last_device_report_tick = now;
     ReportDeviceToHost();
@@ -139,10 +144,13 @@ static void ReportEncoderToHost(void)
   EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
   EncoderSample encoder_d = Encoder_GetSample(MOTOR_D);
 
-  RaspiLink_SendEncoderDelta(encoder_a.delta,
-                             encoder_b.delta,
-                             encoder_c.delta,
-                             encoder_d.delta);
+  if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_ENCODER))
+  {
+    RaspiLink_SendEncoderDelta(encoder_a.delta,
+                               encoder_b.delta,
+                               encoder_c.delta,
+                               encoder_d.delta);
+  }
 
   DebugUart_PrintfIf(
       DEBUG_LOG_ENCODER,
@@ -172,12 +180,15 @@ static void ReportImuToHost(void)
 
     Odometry_Update(&imu, encoder_a, encoder_b, encoder_c, encoder_d, HAL_GetTick());
 
-    RaspiLink_SendImuRaw(imu.accel_x,
-                         imu.accel_y,
-                         imu.accel_z,
-                         imu.gyro_x,
-                         imu.gyro_y,
-                         imu.gyro_z);
+    if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_IMU))
+    {
+      RaspiLink_SendImuRaw(imu.accel_x,
+                           imu.accel_y,
+                           imu.accel_z,
+                           imu.gyro_x,
+                           imu.gyro_y,
+                           imu.gyro_z);
+    }
 
     DebugUart_PrintfIf(
         DEBUG_LOG_IMU,
@@ -209,13 +220,23 @@ static void ReportOdometryToHost(void)
   OdometrySample odometry = Odometry_GetSample();
   OdometryDebug odometry_debug = Odometry_GetDebug();
 
-  RaspiLink_SendOdometry(&odometry);
-  RaspiLink_SendOdometryDebug(odometry.time_ms,
-                              odometry_debug.left_speed_mm_s,
-                              odometry_debug.right_speed_mm_s,
-                              odometry_debug.turn_speed_mm_s,
-                              odometry_debug.left_delta_mm,
-                              odometry_debug.right_delta_mm);
+  if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_ODOMETRY))
+  {
+    RaspiLink_SendOdometry(&odometry);
+  }
+  const uint32_t now = HAL_GetTick();
+  if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_ODOMETRY_DEBUG) &&
+      ((now - g_last_odometry_debug_report_tick) >=
+       ODOMETRY_DEBUG_REPORT_PERIOD_MS))
+  {
+    g_last_odometry_debug_report_tick = now;
+    RaspiLink_SendOdometryDebug(odometry.time_ms,
+                                odometry_debug.left_speed_mm_s,
+                                odometry_debug.right_speed_mm_s,
+                                odometry_debug.turn_speed_mm_s,
+                                odometry_debug.left_delta_mm,
+                                odometry_debug.right_delta_mm);
+  }
 
   DebugUart_PrintfIf(DEBUG_LOG_ODOMETRY,
                      "[ODOM] t=%lu x=%ld y=%ld z=%ld dist=%ld speed=%d "

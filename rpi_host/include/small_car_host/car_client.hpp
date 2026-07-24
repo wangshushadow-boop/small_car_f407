@@ -25,6 +25,7 @@ class CarClient {
   bool SendOdomReset();
   bool SendParamSet(std::uint8_t param_id, std::int32_t value);
   bool SendParamGet(std::uint8_t param_id);
+  bool SendTelemetryConfig(std::uint16_t mask);
 
   // 从串口读取可用数据并更新最近一帧缓存；CLI、monitor、ROS2 bridge 都依赖这个入口。
   void Poll();

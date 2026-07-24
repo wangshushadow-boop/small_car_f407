@@ -30,6 +30,7 @@
 #define RASPI_MSG_SERVO 0x02U
 #define RASPI_MSG_HEARTBEAT 0x03U
 #define RASPI_MSG_PARAM 0x04U
+#define RASPI_MSG_TELEMETRY_CONFIG 0x05U
 #define RASPI_MSG_CHASSIS_STATUS 0x81U
 #define RASPI_MSG_ENCODER_DELTA 0x82U
 #define RASPI_MSG_IMU_RAW 0x83U
@@ -82,6 +83,9 @@ static uint8_t g_tx_seq = 0U;
 static ControlCommand g_host_command = {0};
 static bool g_host_command_valid = false;
 static uint32_t g_last_control_tick = 0U;
+static uint16_t g_telemetry_mask =
+    RASPI_TELEMETRY_CHASSIS | RASPI_TELEMETRY_IMU |
+    RASPI_TELEMETRY_DEVICE | RASPI_TELEMETRY_ODOMETRY;
 
 static bool PopRxByte(uint8_t *data);
 static void ProcessByte(uint8_t data);
@@ -143,6 +147,11 @@ bool RaspiLink_GetControlCommand(ControlCommand *command)
 
   *command = g_host_command;
   return true;
+}
+
+bool RaspiLink_TelemetryEnabled(RaspiTelemetryMask telemetry)
+{
+  return (g_telemetry_mask & (uint16_t)telemetry) != 0U;
 }
 
 void RaspiLink_SendChassisStatus(const ControlCommand *command, int16_t ultra_mm)
@@ -418,6 +427,17 @@ static void HandleFrame(uint8_t msg, uint8_t seq, const uint8_t *payload, uint8_
       break;
     case RASPI_MSG_PARAM:
       HandleParamCommand(seq, payload, length);
+      break;
+    case RASPI_MSG_TELEMETRY_CONFIG:
+      if ((payload == NULL) || (length != 2U))
+      {
+        SendAck(msg, seq, RASPI_ACK_LEN_ERROR);
+      }
+      else
+      {
+        g_telemetry_mask = ReadU16Le(payload);
+        SendAck(msg, seq, RASPI_ACK_OK);
+      }
       break;
     default:
       SendAck(msg, seq, RASPI_ACK_UNSUPPORTED);

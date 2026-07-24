@@ -8,6 +8,7 @@ void Chassis_SetManualVelocity(int16_t forward, int16_t turn);
 void Chassis_SetAutoVelocity(int16_t forward, int16_t turn);
 void Chassis_SetVelocity(int16_t forward, int16_t turn);
 void Chassis_ApplyCommand(const ControlCommand *command);
+void Chassis_TaskStep(uint32_t dt_ms);
 void Chassis_Stop(void);
 
 #endif  // CHASSIS_H_

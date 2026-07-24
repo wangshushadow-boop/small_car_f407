@@ -47,3 +47,27 @@ small_car:
 
     # 参数 ID 15：ROS 转向角速度上限，单位 mrad/s；对应 2.0 rad/s。
     max_angular_speed_mrad_s: 2000
+
+    # 参数 ID 16：ROS/上位机控制是否启用编码器轮速闭环；手柄不受此参数影响。
+    wheel_speed_closed_loop_enabled: 1
+
+    # 参数 ID 17：轮速比例增益 Kp x100；50 表示 0.50 PWM/(mm/s)。
+    wheel_speed_kp_x100: 50
+
+    # 参数 ID 18：轮速积分增益 Ki x100；20 表示 0.20 PWM/(mm/s*s)。
+    wheel_speed_ki_x100: 20
+
+    # 参数 ID 19：积分绝对值上限，防止停车或堵转后积分持续累积。
+    wheel_speed_integral_limit: 1000
+
+    # 参数 ID 20：左右轮目标速度的最大变化率，单位 mm/s^2。
+    wheel_accel_limit_mm_s2: 500
+
+    # 参数 ID 21：电机非零输出的最小 PWM，克服低速静摩擦。
+    wheel_pwm_min: 550
+
+    # 参数 ID 22：左侧电机输出修正，1000 表示 100%。
+    wheel_left_output_permille: 1000
+
+    # 参数 ID 23：右侧电机输出修正，1000 表示 100%。
+    wheel_right_output_permille: 1000

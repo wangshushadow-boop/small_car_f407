@@ -165,6 +165,8 @@ void StartDefaultTask(void *argument)
     (void)ControlMux_SelectCommand(&command);
     /* 搴曠洏灞傚彧鍏冲績鏈€缁堝懡浠わ紝涓嶉渶瑕佺煡閬撳懡浠ゆ潵鑷墜鏌勮繕鏄笂浣嶆満銆?*/
     Chassis_ApplyCommand(&command);
+    /* ROS 物理速度命令执行编码器闭环；手柄仍沿用原有开环路径。 */
+    Chassis_TaskStep(20U);
     SystemStatus_TaskStep(&command);
     if (command.source != last_source)
     {

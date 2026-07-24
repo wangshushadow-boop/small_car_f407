@@ -11,8 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-kilted-ament-index-python \
       ros-kilted-diagnostic-msgs \
       ros-kilted-nav-msgs \
+      ros-kilted-nav2-msgs \
       ros-kilted-robot-state-publisher \
       ros-kilted-sensor-msgs \
+      ros-kilted-std-msgs \
       ros-kilted-std-srvs \
       ros-kilted-tf2-ros \
       ros-kilted-trajectory-msgs \

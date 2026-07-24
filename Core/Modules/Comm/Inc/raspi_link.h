@@ -8,9 +8,19 @@
 #include "odometry.h"
 #include "usart.h"
 
+typedef enum {
+  RASPI_TELEMETRY_CHASSIS = 1U << 0,
+  RASPI_TELEMETRY_ENCODER = 1U << 1,
+  RASPI_TELEMETRY_IMU = 1U << 2,
+  RASPI_TELEMETRY_DEVICE = 1U << 3,
+  RASPI_TELEMETRY_ODOMETRY = 1U << 4,
+  RASPI_TELEMETRY_ODOMETRY_DEBUG = 1U << 5,
+} RaspiTelemetryMask;
+
 void RaspiLink_Init(void);
 void RaspiLink_TaskStep(void);
 bool RaspiLink_GetControlCommand(ControlCommand *command);
+bool RaspiLink_TelemetryEnabled(RaspiTelemetryMask telemetry);
 void RaspiLink_SendChassisStatus(const ControlCommand *command, int16_t ultra_mm);
 void RaspiLink_SendEncoderDelta(int16_t delta_a,
                                 int16_t delta_b,

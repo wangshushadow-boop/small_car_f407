@@ -205,6 +205,14 @@ std::vector<std::uint8_t> MakeParamGetFrame(std::uint8_t seq,
   return EncodeFrame(static_cast<std::uint8_t>(Msg::kParam), seq, payload);
 }
 
+std::vector<std::uint8_t> MakeTelemetryConfigFrame(std::uint8_t seq,
+                                                   std::uint16_t mask) {
+  std::vector<std::uint8_t> payload;
+  PutU16(&payload, mask);
+  return EncodeFrame(static_cast<std::uint8_t>(Msg::kTelemetryConfig), seq,
+                     payload);
+}
+
 std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
   const auto& payload = frame.payload;
   // 这里只解析 MCU 会上传给树莓派的消息；树莓派下发的命令不需要反向解析。
@@ -396,6 +404,10 @@ std::vector<std::uint8_t> PacketCodec::ParamSet(std::uint8_t param_id,
 
 std::vector<std::uint8_t> PacketCodec::ParamGet(std::uint8_t param_id) {
   return MakeParamGetFrame(NextSeq(), param_id);
+}
+
+std::vector<std::uint8_t> PacketCodec::TelemetryConfig(std::uint16_t mask) {
+  return MakeTelemetryConfigFrame(NextSeq(), mask);
 }
 
 std::uint8_t PacketCodec::NextSeq() {

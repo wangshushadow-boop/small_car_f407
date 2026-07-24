@@ -28,10 +28,8 @@ services:
       CAR_VOICE_SENSEVOICE_SCRIPT: /home/ubuntu/.hermes/car_voice/sensevoice_transcribe.py
       CAR_VOICE_CAMERA_CAPTURE_BIN: /workspace/rpi_host/build/v4l2_capture
       CAR_VOICE_CAMERA_DEVICE: /dev/video0
-      CAR_VOICE_FORWARD_SPEED_MPS: "0.55"
-      CAR_VOICE_REVERSE_SPEED_MPS: "0.45"
-      CAR_VOICE_ANGULAR_SPEED_RAD_S: "1.8"
-      CAR_VOICE_MOTION_DURATION_SECONDS: "1.5"
+      CAR_VOICE_FORWARD_SPEED_MPS: "0.30"
+      CAR_VOICE_REVERSE_SPEED_MPS: "0.25"
     working_dir: /workspace/rpi_host/ros2_ws
     command: >-
       bash -lc "source /opt/ros/kilted/setup.bash &&

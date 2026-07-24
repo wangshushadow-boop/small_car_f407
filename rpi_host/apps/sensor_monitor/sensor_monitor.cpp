@@ -226,6 +226,27 @@ int main(int argc, char** argv) {
     return 3;
   }
 
+  std::uint16_t telemetry_mask = 0;
+  if (options.show_imu) {
+    telemetry_mask |= small_car::kTelemetryImu;
+  }
+  if (options.show_encoder) {
+    telemetry_mask |= small_car::kTelemetryEncoder;
+  }
+  if (options.show_chassis || options.show_ultrasonic) {
+    telemetry_mask |= small_car::kTelemetryChassis;
+  }
+  if (options.show_device) {
+    telemetry_mask |= small_car::kTelemetryDevice;
+  }
+  if (options.show_odometry) {
+    telemetry_mask |=
+        small_car::kTelemetryOdometry | small_car::kTelemetryOdometryDebug;
+  }
+  if (!client.SendTelemetryConfig(telemetry_mask)) {
+    std::cerr << "[MON] warning: telemetry config send failed\n";
+  }
+
   std::cout << "[MON] port=" << options.port << " baud=" << options.baudrate << "\n";
   std::cout << "[MON] interval=" << options.interval_ms << " ms\n";
   std::cout << "[MON] press Ctrl+C to stop\n";

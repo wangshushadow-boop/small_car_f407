@@ -85,13 +85,15 @@ ROS2 话题：
 
 | 名称 | 类型 | 方向 | 内容 |
 | --- | --- | --- | --- |
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | 订阅 | `linear.x` 前进速度，`angular.z` 左转角速度。 |
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | 订阅 | 对外控制入口，`linear.x` 为前进速度，`angular.z` 为左转角速度。 |
+| `/cmd_vel_mcu` | `geometry_msgs/msg/Twist` | 内部 | 运动控制器仲裁、限速和平滑后的最终命令。 |
 | `/odom` | `nav_msgs/msg/Odometry` | 发布 | 三维位置、姿态、前向速度和航向角速度。 |
-| `/imu/data_raw` | `sensor_msgs/msg/Imu` | 发布 | ICM20948 原始加速度和角速度，不含姿态。 |
 | `/imu/data` | `sensor_msgs/msg/Imu` | 发布 | MCU 融合姿态以及原始加速度、角速度。 |
+| `/imu/data_raw` | `sensor_msgs/msg/Imu` | 可选发布 | 默认关闭；仅在 IMU 标定和原始数据分析时开启。 |
 | `/ultrasonic/front` | `sensor_msgs/msg/Range` | 发布 | 前方超声距离。 |
-| `/joint_states` | `sensor_msgs/msg/JointState` | 发布 | 四轮角速度和两路舵机指令位置。 |
+| `/joint_states` | `sensor_msgs/msg/JointState` | 可选发布 | 四轮角速度和两路舵机位置，默认 20Hz。 |
 | `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | 发布 | 手柄、IMU、超声和 MCU 错误状态。 |
+| `/control/source` | `std_msgs/msg/UInt8` | 内部发布 | 仅在控制源变化时发布，供运动控制器处理手柄优先级。 |
 | `/servo_controller/joint_trajectory` | `trajectory_msgs/msg/JointTrajectory` | 订阅 | `left_servo_joint`、`right_servo_joint` 目标位置。 |
 
 ROS2 服务与坐标系：
@@ -99,6 +101,8 @@ ROS2 服务与坐标系：
 | 名称 | 类型/关系 | 说明 |
 | --- | --- | --- |
 | `/reset_odometry` | `std_srvs/srv/Empty` | 清零 MCU 里程计。 |
+| `/drive_on_heading` | `nav2_msgs/action/DriveOnHeading` | 按里程计闭环行驶指定距离。 |
+| `/spin` | `nav2_msgs/action/Spin` | 按里程计闭环旋转指定角度。 |
 | 动态 TF | `odom -> base_link` | 小车三维位姿。 |
 | URDF 固定关节 | `base_link -> imu_link` | IMU 安装关系，由 `robot_state_publisher` 发布。 |
 | URDF 固定关节 | `base_link -> ultrasonic_link` | 超声安装关系，由 `robot_state_publisher` 发布。 |
@@ -108,10 +112,13 @@ ROS2 相关参数：
 | 文件 | 作用 |
 | --- | --- |
 | `rpi_host/config/chassis_params.yaml` | MCU 标定参数，bridge 启动时整组下发并回读校验。 |
-| `rpi_host/ros2_ws/src/smallcar_ros_and_mcu_bridge/config/bridge.yaml` | 串口、坐标系、速度上限、舵机映射和传感器属性。 |
+| `rpi_host/ros2_ws/src/smallcar_ros_and_mcu_bridge/config/bridge.yaml` | 串口、坐标系、舵机映射、ROS 发布开关和传感器属性。 |
+| `rpi_host/ros2_ws/src/small_car_motion_controller/config/motion_controller.yaml` | 定距、定角、减速、容差、超时和避障参数。 |
 | `rpi_host/ros2_ws/src/small_car_description/urdf/robot_geometry.xacro` | IMU、超声、相机、树莓派、MCU 等硬件安装坐标。 |
 
-`/cmd_vel` 使用 ROS2 标准单位。bridge 将线速度转换为 `mm/s`、角速度转换为 `mrad/s` 后通过协议 v2 下发；MCU 当前仍按标定上限换算为开环电机输出。电机闭环完成前，实际速度精度仍取决于负载、电量和地面摩擦。
+`/cmd_vel` 使用 ROS2 标准单位。运动控制器完成命令仲裁和加速度限制，通过
+`/cmd_vel_mcu` 交给 bridge；bridge 转换为 `mm/s` 和 `mrad/s` 后使用协议 v2
+下发，MCU 再通过左右轮速度闭环执行。
 
 ## WSL 远程连接 ROS2
 
@@ -133,18 +140,22 @@ ros2 topic info /cmd_vel --verbose
 
 输出中的 `Subscription count` 应为 `1`。Fast DDS 跨 WSL 时节点名可能显示为 `NODE_NAME_UNKNOWN`，不影响话题收发。
 
-当前开环映射中，`2.0 rad/s` 对应电机输出 `1000`。实测转向起步输出约为 `620`，因此角速度通常需要达到约 `1.24 rad/s` 才能克服静摩擦；后续接入轮速闭环后再消除该限制。
+MCU 已使用左右轮速度闭环执行树莓派下发的物理速度。起步 PWM、PI、加速度限制和
+左右轮补偿统一在 `rpi_host/config/chassis_params.yaml` 中调整。
 
 ## Hermes 语音控制
 
-语音程序和 ROS2 bridge 由同一容器管理。语音程序只把本地规则明确识别出的动作发布到 `/cmd_vel`，不会执行大模型生成的速度值。
+语音程序和 ROS2 bridge 由同一容器管理。语音程序只执行本地规则明确识别出的动作：
+定距命令调用 `/drive_on_heading`，定角命令调用 `/spin`，停止命令发布零速度。
 
 | 语音 | 动作 |
 | --- | --- |
-| “小车前进” | 以 `0.55 m/s` 前进 1.5 秒后停车。 |
-| “小车后退” | 以 `0.45 m/s` 后退 1.5 秒后停车。 |
-| “小车左转” | 以 `1.8 rad/s` 左转 1.5 秒后停车。 |
-| “小车右转” | 以 `1.8 rad/s` 右转 1.5 秒后停车。 |
+| “小车前进” | 默认通过里程计闭环前进 `0.5m`。 |
+| “小车后退” | 默认通过里程计闭环后退 `0.5m`。 |
+| “小车左转” | 默认通过里程计闭环左转 `90°`。 |
+| “小车右转” | 默认通过里程计闭环右转 `90°`。 |
+| “小车前进一米” | 解析距离后调用定距 Action。 |
+| “小车右转四十五度” | 解析角度后调用定角 Action。 |
 | “小车停止”（对话中也可说“停止”或“停车”） | 立即发送零速度。 |
 
 查看语音识别、意图和运动发布日志：
@@ -154,7 +165,16 @@ cd ~/small_car_f407/rpi_host/ros2
 docker compose logs -f | grep -E "Voice daemon|Transcript|Intent|Motion"
 ```
 
-运动速度和持续时间在 `rpi_host/ros2/compose.yaml` 的 `CAR_VOICE_*` 环境变量中配置，所有值仍受 bridge 的最大速度限制和 MCU 超声避障限制。
+不经过麦克风和语音识别，直接验证“本地意图规则 → ROS2 Action → `/cmd_vel_mcu` → MCU →
+编码器”链路：
+
+```bash
+docker compose exec small_car_ros2 \
+  python3 /workspace/rpi_host/tools/hermes_voice_daemon.py --test-motion 小车前进
+```
+
+该命令使用正式语音解析和运动 Action，完成、取消或超时后都会停车。动作速度、
+减速、容差和超时由 `motion_controller.yaml` 管理；语音模块只提供目标距离或角度。
 
 ## 参数调试
 
@@ -180,7 +200,7 @@ docker compose logs -f
 看到类似输出表示成功：
 
 ```text
-applied and verified 15 chassis parameters
+applied and verified 23 chassis parameters
 ```
 
 ## 独立串口工具

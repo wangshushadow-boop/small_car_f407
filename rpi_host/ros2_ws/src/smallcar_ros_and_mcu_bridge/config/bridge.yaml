@@ -2,6 +2,8 @@ smallcar_ros_and_mcu_bridge:
   ros__parameters:
     serial_port: /dev/small_car_mcu
     baud_rate: 115200
+    # MCU 只接收运动控制器仲裁、平滑后的最终速度。
+    cmd_vel_topic: cmd_vel_mcu
 
     # ROS 物理速度限幅；串口协议分别按 mm/s 和 mrad/s 下发。
     max_linear_speed_mps: 0.6
@@ -16,6 +18,10 @@ smallcar_ros_and_mcu_bridge:
     imu_frame: imu_link
     ultrasonic_frame: ultrasonic_link
     publish_tf: true
+    # 默认只发布带姿态的 /imu/data；标定原始传感器时再开启 data_raw。
+    publish_imu_raw: false
+    # RViz 需要轮子和舵机关节状态；关闭后 MCU 不再上传轮速调试流。
+    publish_joint_states: true
 
     # 65 mm 车轮的半径；实测后可继续标定。
     wheel_radius_m: 0.0325

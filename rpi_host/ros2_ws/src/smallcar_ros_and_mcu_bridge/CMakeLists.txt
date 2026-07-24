@@ -12,6 +12,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(trajectory_msgs REQUIRED)
@@ -36,6 +37,7 @@ target_link_libraries(smallcar_ros_and_mcu_bridge_node PRIVATE
   ${geometry_msgs_TARGETS}
   ${nav_msgs_TARGETS}
   ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS}
   ${std_srvs_TARGETS}
   ${trajectory_msgs_TARGETS}
   ament_index_cpp::ament_index_cpp

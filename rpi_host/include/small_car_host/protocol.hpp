@@ -23,6 +23,7 @@ enum class Msg : std::uint8_t {
   kServo = 0x02,
   kHeartbeat = 0x03,
   kParam = 0x04,
+  kTelemetryConfig = 0x05,
   kChassisStatus = 0x81,
   kEncoderDelta = 0x82,
   kImuRaw = 0x83,
@@ -31,6 +32,15 @@ enum class Msg : std::uint8_t {
   kOdometry = 0x86,
   kOdometryDebug = 0x87,
   kParamValue = 0x88,
+};
+
+enum Telemetry : std::uint16_t {
+  kTelemetryChassis = 1U << 0,
+  kTelemetryEncoder = 1U << 1,
+  kTelemetryImu = 1U << 2,
+  kTelemetryDevice = 1U << 3,
+  kTelemetryOdometry = 1U << 4,
+  kTelemetryOdometryDebug = 1U << 5,
 };
 
 struct Frame {
@@ -76,6 +86,8 @@ std::vector<std::uint8_t> MakeParamSetFrame(std::uint8_t seq,
 std::vector<std::uint8_t> MakeParamGetFrame(std::uint8_t seq,
                                             std::uint8_t param_id,
                                             std::uint32_t host_time_ms = NowMs());
+std::vector<std::uint8_t> MakeTelemetryConfigFrame(std::uint8_t seq,
+                                                   std::uint16_t mask);
 
 std::optional<DecodedMessage> DecodePayload(const Frame& frame);
 
@@ -101,6 +113,7 @@ class PacketCodec {
   std::vector<std::uint8_t> OdomReset();
   std::vector<std::uint8_t> ParamSet(std::uint8_t param_id, std::int32_t value);
   std::vector<std::uint8_t> ParamGet(std::uint8_t param_id);
+  std::vector<std::uint8_t> TelemetryConfig(std::uint16_t mask);
 
  private:
   std::uint8_t NextSeq();
