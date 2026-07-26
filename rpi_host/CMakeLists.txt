@@ -9,21 +9,21 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(SMALL_CAR_ENABLE_OPENCV "Build OpenCV camera tools" OFF)
 
 add_library(small_car_protocol
-  modules/protocol/protocol.cpp
+  src/small_car_base/protocol/protocol.cpp
 )
 target_include_directories(small_car_protocol
   PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 if(UNIX)
   find_package(yaml-cpp REQUIRED)
 
   add_library(small_car_host
-    modules/audio/audio_device.cpp
-    modules/chassis/chassis_config.cpp
-    modules/mcu_client/car_client.cpp
-    modules/transport/serial_port.cpp
+    src/small_car_base/audio/audio_device.cpp
+    src/small_car_base/chassis/chassis_config.cpp
+    src/small_car_base/mcu/car_client.cpp
+    src/small_car_base/transport/serial_port.cpp
   )
   target_link_libraries(small_car_host
     PUBLIC
@@ -36,7 +36,7 @@ if(UNIX)
   )
   target_include_directories(small_car_host
     PUBLIC
-      ${CMAKE_CURRENT_SOURCE_DIR}/include
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
   )
   target_compile_definitions(small_car_host
     PRIVATE _DEFAULT_SOURCE
@@ -69,14 +69,22 @@ if(UNIX)
 endif()
 
 add_executable(protocol_test
-  tests/protocol_test.cpp
+  src/small_car_base/protocol/protocol_test.cpp
 )
 target_link_libraries(protocol_test
   PRIVATE small_car_protocol
 )
 
+add_executable(module_test
+  src/small_car_base/control/module_test.cpp
+  src/small_car_base/control/command_safety.cpp
+  src/small_car_base/servo/gimbal_controller.cpp
+)
+target_include_directories(module_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
 enable_testing()
 add_test(NAME protocol_test COMMAND protocol_test)
+add_test(NAME module_test COMMAND module_test)
 
 if(SMALL_CAR_ENABLE_OPENCV)
   find_package(OpenCV REQUIRED COMPONENTS core videoio imgcodecs)

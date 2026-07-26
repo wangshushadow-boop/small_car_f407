@@ -11,8 +11,8 @@
 #include <string>
 #include <thread>
 
-#include "small_car_host/car_client.hpp"
-#include "small_car_host/chassis_config.hpp"
+#include "small_car_base/chassis/chassis_config.hpp"
+#include "small_car_base/mcu/car_client.hpp"
 
 namespace {
 
@@ -25,7 +25,7 @@ void PrintUsage() {
       << "  small_car_host_cli --port /dev/ttyACM0 heartbeat\n"
       << "  small_car_host_cli --port /dev/ttyACM0 stop\n"
       << "  small_car_host_cli --port /dev/ttyACM0 drive <linear_mm_s> <angular_mrad_s>\n"
-      << "  small_car_host_cli --port /dev/ttyACM0 servo <left_us> <right_us>\n"
+      << "  small_car_host_cli --port /dev/ttyACM0 servo <upper_us> <lower_us>\n"
       << "  small_car_host_cli --port /dev/ttyACM0 odom-reset\n";
 }
 

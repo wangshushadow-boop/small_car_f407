@@ -1,0 +1,297 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="small_car">
+  <xacro:include filename="$(find small_car_description)/urdf/robot_geometry.xacro"/>
+
+  <material name="metal_black"><color rgba="0.035 0.040 0.045 1.0"/></material>
+  <material name="plastic_black"><color rgba="0.012 0.014 0.016 1.0"/></material>
+  <material name="dark_gray"><color rgba="0.10 0.11 0.12 1.0"/></material>
+  <material name="plate_gray"><color rgba="0.20 0.23 0.26 1.0"/></material>
+  <material name="mcu_green"><color rgba="0.03 0.42 0.18 1.0"/></material>
+  <material name="pi_green"><color rgba="0.18 0.52 0.25 1.0"/></material>
+  <material name="sensor_green"><color rgba="0.08 0.36 0.14 1.0"/></material>
+  <material name="sensor_blue"><color rgba="0.10 0.40 0.82 1.0"/></material>
+  <material name="servo_blue"><color rgba="0.08 0.24 0.52 1.0"/></material>
+  <material name="camera_blue"><color rgba="0.08 0.18 0.30 1.0"/></material>
+  <material name="imu_orange"><color rgba="0.95 0.42 0.08 1.0"/></material>
+  <material name="wheel_marker"><color rgba="1.00 0.08 0.03 1.0"/></material>
+  <material name="speaker_gray"><color rgba="0.30 0.33 0.36 1.0"/></material>
+  <material name="aluminum"><color rgba="0.62 0.65 0.68 1.0"/></material>
+  <material name="brass"><color rgba="0.72 0.52 0.18 1.0"/></material>
+  <material name="acrylic"><color rgba="0.72 0.82 0.88 0.45"/></material>
+  <material name="lens"><color rgba="0.02 0.06 0.10 1.0"/></material>
+
+  <xacro:macro name="box_visual" params="xyz rpy size material">
+    <visual>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <geometry><box size="${size}"/></geometry>
+      <material name="${material}"/>
+    </visual>
+  </xacro:macro>
+
+  <xacro:macro name="cylinder_visual" params="xyz rpy radius length material">
+    <visual>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <geometry><cylinder radius="${radius}" length="${length}"/></geometry>
+      <material name="${material}"/>
+    </visual>
+  </xacro:macro>
+
+  <!-- base_link 位于四个车轮轴线围成的矩形中心。 -->
+  <link name="base_link">
+    <xacro:box_visual xyz="0 0 ${lower_deck_z}" rpy="0 0 0"
+                      size="${chassis_length} ${chassis_width} ${deck_thickness}"
+                      material="metal_black"/>
+    <xacro:box_visual xyz="0 0 ${main_deck_z}" rpy="0 0 0"
+                      size="${chassis_length} ${chassis_width} ${deck_thickness}"
+                      material="metal_black"/>
+
+    <!-- 四个减速电机位于车轮内侧。 -->
+    <xacro:box_visual xyz="0.066 0.043 0" rpy="0 0 0"
+                      size="0.050 0.027 0.030" material="aluminum"/>
+    <xacro:box_visual xyz="0.066 -0.043 0" rpy="0 0 0"
+                      size="0.050 0.027 0.030" material="aluminum"/>
+    <xacro:box_visual xyz="-0.066 0.043 0" rpy="0 0 0"
+                      size="0.050 0.027 0.030" material="aluminum"/>
+    <xacro:box_visual xyz="-0.066 -0.043 0" rpy="0 0 0"
+                      size="0.050 0.027 0.030" material="aluminum"/>
+
+    <!-- 下层板与主承载板之间的四根金属立柱。 -->
+    <xacro:cylinder_visual xyz="0.086 0.048 0.0075" rpy="0 0 0"
+                           radius="0.003" length="0.063" material="aluminum"/>
+    <xacro:cylinder_visual xyz="0.086 -0.048 0.0075" rpy="0 0 0"
+                           radius="0.003" length="0.063" material="aluminum"/>
+    <xacro:cylinder_visual xyz="-0.086 0.048 0.0075" rpy="0 0 0"
+                           radius="0.003" length="0.063" material="aluminum"/>
+    <xacro:cylinder_visual xyz="-0.086 -0.048 0.0075" rpy="0 0 0"
+                           radius="0.003" length="0.063" material="aluminum"/>
+
+    <!-- 用简单包围盒表示底盘碰撞体，避免视觉细节增加碰撞计算量。 -->
+    <collision>
+      <origin xyz="0 0 0.0075"/>
+      <geometry><box size="${chassis_length} 0.105 0.067"/></geometry>
+    </collision>
+  </link>
+
+  <xacro:macro name="wheel" params="prefix x y axis_y">
+    <link name="${prefix}_wheel_link">
+      <xacro:cylinder_visual xyz="0 0 0" rpy="1.57079632679 0 0"
+                             radius="${wheel_radius}" length="${wheel_width}"
+                             material="plastic_black"/>
+    <xacro:cylinder_visual xyz="0 0 0" rpy="1.57079632679 0 0"
+                             radius="0.006" length="${wheel_width + 0.002}"
+                             material="aluminum"/>
+      <!--
+        红色非对称辐条位于轮胎外侧。它从轮心指向轮缘，随 wheel_link
+        一起旋转，因此既能观察旋转方向，也不会产生 180 度视觉混淆。
+      -->
+      <xacro:box_visual
+          xyz="0 ${axis_y * (wheel_width / 2.0 + 0.0025)} ${wheel_radius * 0.42}"
+          rpy="0 0 0" size="0.006 0.004 0.026" material="wheel_marker"/>
+      <xacro:box_visual
+          xyz="0 ${axis_y * (wheel_width / 2.0 + 0.0030)} ${wheel_radius * 0.82}"
+          rpy="0 0 0" size="0.014 0.005 0.008" material="wheel_marker"/>
+      <collision>
+        <origin rpy="1.57079632679 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+    </link>
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${prefix}_wheel_link"/>
+      <origin xyz="${x} ${y} 0"/>
+      <axis xyz="0 ${axis_y} 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:wheel prefix="front_left" x="${wheelbase / 2.0}"
+               y="${wheel_track / 2.0}" axis_y="1"/>
+  <xacro:wheel prefix="rear_left" x="${-wheelbase / 2.0}"
+               y="${wheel_track / 2.0}" axis_y="1"/>
+  <xacro:wheel prefix="front_right" x="${wheelbase / 2.0}"
+               y="${-wheel_track / 2.0}" axis_y="-1"/>
+  <xacro:wheel prefix="rear_right" x="${-wheelbase / 2.0}"
+               y="${-wheel_track / 2.0}" axis_y="-1"/>
+
+  <!-- 摄像头、树莓派和音响共用的新增载荷安装板。 -->
+  <link name="upper_plate_link">
+    <xacro:box_visual xyz="0 0 0" rpy="0 0 0" size="${upper_plate_size}"
+                      material="plate_gray"/>
+    <xacro:cylinder_visual xyz="0.070 0.043 -0.018" rpy="0 0 0"
+                           radius="0.0025" length="0.034" material="brass"/>
+    <xacro:cylinder_visual xyz="0.070 -0.043 -0.018" rpy="0 0 0"
+                           radius="0.0025" length="0.034" material="brass"/>
+    <xacro:cylinder_visual xyz="-0.070 0.043 -0.018" rpy="0 0 0"
+                           radius="0.0025" length="0.034" material="brass"/>
+    <xacro:cylinder_visual xyz="-0.070 -0.043 -0.018" rpy="0 0 0"
+                           radius="0.0025" length="0.034" material="brass"/>
+  </link>
+  <joint name="upper_plate_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="upper_plate_link"/>
+    <origin xyz="${upper_plate_xyz}"/>
+  </joint>
+
+  <!-- C30D MCU 主控板位于两层安装板之间，并保持水平。 -->
+  <link name="mcu_link">
+    <xacro:box_visual xyz="0 0 0" rpy="0 0 0" size="${mcu_size}"
+                      material="mcu_green"/>
+    <xacro:box_visual xyz="0.005 0 0.005" rpy="0 0 0" size="0.026 0.026 0.006"
+                      material="plastic_black"/>
+    <xacro:box_visual xyz="0.035 0.018 0.005" rpy="0 0 0" size="0.014 0.012 0.008"
+                      material="aluminum"/>
+    <xacro:box_visual xyz="0.035 -0.018 0.005" rpy="0 0 0" size="0.014 0.012 0.008"
+                      material="aluminum"/>
+    <xacro:box_visual xyz="-0.035 0 0.005" rpy="0 0 0" size="0.012 0.030 0.008"
+                      material="dark_gray"/>
+  </link>
+  <joint name="mcu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="mcu_link"/>
+    <origin xyz="${mcu_xyz}"/>
+  </joint>
+
+  <!-- IMU 是 MCU 板上的板载器件，水平姿态与 PCB 一致。 -->
+  <link name="imu_link">
+    <xacro:box_visual xyz="0 0 0" rpy="0 0 0" size="0.015 0.015 0.004"
+                      material="imu_orange"/>
+  </link>
+  <joint name="imu_joint" type="fixed">
+    <parent link="mcu_link"/>
+    <child link="imu_link"/>
+    <origin xyz="${imu_xyz}" rpy="${imu_rpy}"/>
+  </joint>
+
+  <!-- HC-SR04 类双探头超声模块。 -->
+  <link name="ultrasonic_link">
+    <xacro:box_visual xyz="-0.006 0 0" rpy="0 0 0" size="0.012 0.050 0.022"
+                      material="sensor_green"/>
+    <xacro:cylinder_visual xyz="0 0.012 0" rpy="0 1.57079632679 0"
+                           radius="0.008" length="0.014" material="aluminum"/>
+    <xacro:cylinder_visual xyz="0 -0.012 0" rpy="0 1.57079632679 0"
+                           radius="0.008" length="0.014" material="aluminum"/>
+  </link>
+  <joint name="ultrasonic_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_link"/>
+    <origin xyz="${ultrasonic_xyz}" rpy="${ultrasonic_rpy}"/>
+  </joint>
+
+  <!-- 树莓派、透明安装板和顶部散热器。 -->
+  <link name="computer_link">
+    <xacro:box_visual xyz="0 0 -0.010" rpy="0 0 0" size="0.095 0.070 0.004"
+                      material="acrylic"/>
+    <xacro:box_visual xyz="0 0 0" rpy="0 0 0" size="${computer_size}"
+                      material="pi_green"/>
+    <xacro:box_visual xyz="0 0 0.013" rpy="0 0 0" size="0.060 0.050 0.012"
+                      material="aluminum"/>
+    <xacro:cylinder_visual xyz="0.037 0.025 0.010" rpy="0 0 0"
+                           radius="0.002" length="0.030" material="brass"/>
+    <xacro:cylinder_visual xyz="0.037 -0.025 0.010" rpy="0 0 0"
+                           radius="0.002" length="0.030" material="brass"/>
+    <xacro:cylinder_visual xyz="-0.037 0.025 0.010" rpy="0 0 0"
+                           radius="0.002" length="0.030" material="brass"/>
+    <xacro:cylinder_visual xyz="-0.037 -0.025 0.010" rpy="0 0 0"
+                           radius="0.002" length="0.030" material="brass"/>
+  </link>
+  <joint name="computer_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="computer_link"/>
+    <origin xyz="${computer_xyz}"/>
+  </joint>
+
+  <!-- Jabra 圆形 USB 音响，平放在树莓派上方。 -->
+  <link name="speaker_link">
+    <xacro:cylinder_visual xyz="0 0 0" rpy="0 0 0"
+                           radius="${speaker_radius}" length="${speaker_height}"
+                           material="plastic_black"/>
+    <xacro:cylinder_visual xyz="0 0 0.0125" rpy="0 0 0"
+                           radius="0.045" length="0.002" material="speaker_gray"/>
+  </link>
+  <joint name="speaker_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="speaker_link"/>
+    <origin xyz="${speaker_xyz}"/>
+  </joint>
+
+  <!-- 上层舵机及其底座随 upper_servo_joint 绕 z 轴旋转。 -->
+  <link name="pan_link">
+    <xacro:box_visual xyz="0 0 0" rpy="0 0 0" size="0.060 0.058 0.004"
+                      material="metal_black"/>
+    <xacro:box_visual xyz="0 0 0.023" rpy="0 0 0" size="0.042 0.024 0.044"
+                      material="servo_blue"/>
+    <xacro:box_visual xyz="0 0.029 0.052" rpy="0 0 0" size="0.052 0.004 0.080"
+                      material="metal_black"/>
+    <xacro:box_visual xyz="0 -0.029 0.052" rpy="0 0 0" size="0.052 0.004 0.080"
+                      material="metal_black"/>
+    <!-- 上方俯仰舵机的外壳固定在水平旋转云台上，本身不参与俯仰。 -->
+    <xacro:box_visual xyz="0 0 0.070" rpy="0 0 0" size="0.044 0.052 0.036"
+                      material="servo_blue"/>
+  </link>
+  <joint name="upper_servo_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="pan_link"/>
+    <origin xyz="${pan_joint_xyz}"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.57079632679" upper="1.57079632679" effort="1.0" velocity="2.0"/>
+  </joint>
+
+  <!--
+    俯仰运动部分从舵机横向输出轴开始。横轴沿 y 方向，轴两端连接
+    相机支架；lower_servo_joint 转动时，横轴、支架和相机一起旋转。
+  -->
+  <link name="tilt_link">
+    <!-- 贯穿舵机两侧的横向输出轴。 -->
+    <xacro:cylinder_visual xyz="0 0 0" rpy="1.57079632679 0 0"
+                           radius="0.005" length="0.070" material="aluminum"/>
+    <!-- 输出轴两侧的圆形舵盘。 -->
+    <xacro:cylinder_visual xyz="0 0.030 0" rpy="1.57079632679 0 0"
+                           radius="0.010" length="0.006" material="metal_black"/>
+    <xacro:cylinder_visual xyz="0 -0.030 0" rpy="1.57079632679 0 0"
+                           radius="0.010" length="0.006" material="metal_black"/>
+    <!--
+      两侧摆臂从横轴沿 +x 向车头伸出，再向上折弯。侧面观察时呈
+      卧式 L/C 形，与实车照片中红框标出的相机承载结构一致。
+    -->
+    <xacro:box_visual xyz="0.031 0.031 0" rpy="0 0 0" size="0.062 0.004 0.008"
+                      material="metal_black"/>
+    <xacro:box_visual xyz="0.031 -0.031 0" rpy="0 0 0" size="0.062 0.004 0.008"
+                      material="metal_black"/>
+    <xacro:box_visual xyz="0.062 0.031 0.055" rpy="0 0 0" size="0.008 0.004 0.110"
+                      material="metal_black"/>
+    <xacro:box_visual xyz="0.062 -0.031 0.055" rpy="0 0 0" size="0.008 0.004 0.110"
+                      material="metal_black"/>
+    <!-- 顶部横梁连接左右摆臂，并提供相机安装平面。 -->
+    <xacro:box_visual xyz="0.062 0 0.110" rpy="0 0 0" size="0.030 0.066 0.006"
+                      material="metal_black"/>
+  </link>
+  <joint name="lower_servo_joint" type="revolute">
+    <parent link="pan_link"/>
+    <child link="tilt_link"/>
+    <origin xyz="${tilt_joint_xyz}"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.57079632679" upper="1.57079632679" effort="1.0" velocity="2.0"/>
+  </joint>
+
+  <!-- C100 RGB 方形相机，镜头朝向车体 +x。 -->
+  <link name="camera_link">
+    <xacro:box_visual xyz="0 0 0" rpy="0 0 0" size="${camera_size}"
+                      material="camera_blue"/>
+    <xacro:cylinder_visual xyz="0.014 0 0" rpy="0 1.57079632679 0"
+                           radius="0.014" length="0.010" material="plastic_black"/>
+    <xacro:cylinder_visual xyz="0.020 0 0" rpy="0 1.57079632679 0"
+                           radius="0.007" length="0.004" material="lens"/>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <parent link="tilt_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${camera_xyz}"/>
+  </joint>
+
+  <!-- ROS 光学坐标系：z 向前、x 向右、y 向下。 -->
+  <link name="camera_optical_frame"/>
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_frame"/>
+    <origin xyz="0.022 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
+  </joint>
+</robot>

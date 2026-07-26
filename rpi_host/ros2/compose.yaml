@@ -30,12 +30,16 @@ services:
       CAR_VOICE_CAMERA_DEVICE: /dev/video0
       CAR_VOICE_FORWARD_SPEED_MPS: "0.30"
       CAR_VOICE_REVERSE_SPEED_MPS: "0.25"
-    working_dir: /workspace/rpi_host/ros2_ws
+    working_dir: /workspace/rpi_host
     command: >-
       bash -lc "source /opt/ros/kilted/setup.bash &&
-      colcon build --symlink-install &&
-      source install/setup.bash &&
-      ros2 launch smallcar_ros_and_mcu_bridge bridge.launch.py"
+      colcon --log-base log-ros build
+      --base-paths src
+      --build-base build-ros
+      --install-base install-ros
+      --symlink-install &&
+      source install-ros/setup.bash &&
+      ros2 launch small_car_nav2 system.launch.py"
     logging:
       driver: local
       options:

@@ -4,7 +4,7 @@
  *
  * 用于验证 USB 音频设备的录音和播放路径是否同时可用。
  */
-#include "small_car_host/audio_device.hpp"
+#include "small_car_base/audio/audio_device.hpp"
 
 #include <cstdint>
 #include <exception>

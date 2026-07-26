@@ -145,17 +145,19 @@ class RosMotionPublisher:
 
   def __init__(self) -> None:
     import rclpy
-    from geometry_msgs.msg import Twist
+    from geometry_msgs.msg import TwistStamped
     from nav2_msgs.action import DriveOnHeading, Spin
     from rclpy.action import ActionClient
 
     self._rclpy = rclpy
-    self._twist_type = Twist
+    self._twist_type = TwistStamped
     self._drive_type = DriveOnHeading
     self._spin_type = Spin
     self._rclpy.init(args=None)
     self._node = self._rclpy.create_node("hermes_voice_motion")
-    self._stop_publisher = self._node.create_publisher(Twist, "/cmd_vel", 10)
+    self._stop_publisher = self._node.create_publisher(
+        TwistStamped, "/cmd_vel", 10
+    )
     self._drive_client = ActionClient(
         self._node, DriveOnHeading, "/drive_on_heading"
     )
@@ -211,7 +213,10 @@ class RosMotionPublisher:
     if self._goal_handle is not None:
       self._goal_handle.cancel_goal_async()
       self._goal_handle = None
-    self._stop_publisher.publish(self._twist_type())
+    command = self._twist_type()
+    command.header.stamp = self._node.get_clock().now().to_msg()
+    command.header.frame_id = "base_link"
+    self._stop_publisher.publish(command)
     self._done.set()
     LOG.info("Motion stopped")
 

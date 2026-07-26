@@ -28,7 +28,8 @@
  *
  * 为了避免在 MCU 中使用浮点，使用整数比例：
  * 2042 / 15600 = 0.1309 mm/tick。
- * 实测直行后通过 chassis_params.yaml 调整分子，分母保持 15600。
+ * 实测直行后通过 rpi_host/src/small_car_base/config/chassis.yaml 调整分子，
+ * 分母保持 15600。
  */
 /*
  * 2026-07-18 first floor calibration:

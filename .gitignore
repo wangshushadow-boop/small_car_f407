@@ -2,8 +2,8 @@
 build/
 cmake-build-*/
 rpi_host/build*/
-rpi_host/ros2_ws/install/
-rpi_host/ros2_ws/log/
+rpi_host/install/
+rpi_host/log/
 out/
 bin/
 obj/
@@ -83,4 +83,5 @@ Desktop.ini
 *.tmp
 *.bak
 *.orig
+__pycache__/
 rpi_host/runtime/*.request

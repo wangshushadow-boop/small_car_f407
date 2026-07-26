@@ -4,8 +4,8 @@
  *
  * 程序启动时可自动从 YAML 下发底盘参数，并按命令行选项选择要打印的遥测类型。
  */
-#include "small_car_host/car_client.hpp"
-#include "small_car_host/chassis_config.hpp"
+#include "small_car_base/chassis/chassis_config.hpp"
+#include "small_car_base/mcu/car_client.hpp"
 
 #include <chrono>
 #include <cstdint>

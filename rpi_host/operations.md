@@ -22,23 +22,26 @@ ubuntu@192.168.3.85
 | 2 | 上传到树莓派 `/tmp`。 |
 | 3 | 替换树莓派上的源码目录。 |
 | 4 | 重新构建 C++ 工具并运行协议测试。 |
-| 5 | 重建并强制重启 ROS2 bridge 容器。 |
-| 6 | 在同一容器中启动 Hermes 语音控制，并停用旧宿主机语音服务。 |
+| 5 | 重建并强制重启包含底盘与 Nav2 的 ROS2 容器。 |
+| 6 | 启动 `small_car_base_node` 与 `nav2_container` 两个核心进程。 |
 
-YAML 参数会在 bridge 重启后重新读取并下发到 MCU。
+YAML 参数会在底盘节点重启后重新读取并下发到 MCU。
 
 ## 树莓派本地构建
 
 ```bash
 cd ~/small_car_f407/rpi_host
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake -S . -B build-host
+cmake --build build-host
+ctest --test-dir build-host --output-on-failure
 ```
 
-## ROS2 bridge
+## ROS2 与 Nav2
 
-ROS2 运行在树莓派，STM32 负责传感器采集、电机控制、安全逻辑和实时里程计。`smallcar_ros_and_mcu_bridge` 将 MCU 串口协议转换为标准 ROS2 接口，算法节点不需要直接解析 MCU 协议。
+ROS2 运行在树莓派，`small_car_base_node` 独占 MCU 串口并提供标准底盘接口。
+Nav2 已安装在同一镜像中，并通过独立的 `nav2_container` 进程运行官方组件。
+当前为 odom-only 部署，正式地图导航前仍需接入定位。模块和接口定义见
+`rpi_host/docs`。
 
 ```bash
 cd ~/small_car_f407/rpi_host/ros2
@@ -53,7 +56,7 @@ docker compose down
 cd ~/small_car_f407/rpi_host/ros2
 docker compose exec small_car_ros2 bash
 source /opt/ros/kilted/setup.bash
-source /workspace/rpi_host/ros2_ws/install/setup.bash
+source /workspace/rpi_host/install-ros/setup.bash
 ```
 
 常用 ROS2 命令：
@@ -70,39 +73,37 @@ ros2 service call /reset_odometry std_srvs/srv/Empty "{}"
 持续发送低速前进，结束后按 `Ctrl+C`：
 
 ```bash
-ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist \
-  "{linear: {x: 0.5}, angular: {z: 0.0}}"
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/TwistStamped \
+  "{header: auto, twist: {linear: {x: 0.5}, angular: {z: 0.0}}}"
 ```
 
 发送停车命令：
 
 ```bash
-ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \
-  "{linear: {x: 0.0}, angular: {z: 0.0}}"
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/TwistStamped \
+  "{header: auto, twist: {linear: {x: 0.0}, angular: {z: 0.0}}}"
 ```
 
 ROS2 话题：
 
 | 名称 | 类型 | 方向 | 内容 |
 | --- | --- | --- | --- |
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | 订阅 | 对外控制入口，`linear.x` 为前进速度，`angular.z` 为左转角速度。 |
-| `/cmd_vel_mcu` | `geometry_msgs/msg/Twist` | 内部 | 运动控制器仲裁、限速和平滑后的最终命令。 |
+| `/cmd_vel` | `geometry_msgs/msg/TwistStamped` | 订阅 | 唯一底盘速度入口，必须携带有效时间戳。 |
 | `/odom` | `nav_msgs/msg/Odometry` | 发布 | 三维位置、姿态、前向速度和航向角速度。 |
 | `/imu/data` | `sensor_msgs/msg/Imu` | 发布 | MCU 融合姿态以及原始加速度、角速度。 |
-| `/imu/data_raw` | `sensor_msgs/msg/Imu` | 可选发布 | 默认关闭；仅在 IMU 标定和原始数据分析时开启。 |
+| `/debug/imu/raw` | `sensor_msgs/msg/Imu` | 可选发布 | `debug_enabled=true` 时用于 IMU 标定。 |
 | `/ultrasonic/front` | `sensor_msgs/msg/Range` | 发布 | 前方超声距离。 |
 | `/joint_states` | `sensor_msgs/msg/JointState` | 可选发布 | 四轮角速度和两路舵机位置，默认 20Hz。 |
 | `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | 发布 | 手柄、IMU、超声和 MCU 错误状态。 |
-| `/control/source` | `std_msgs/msg/UInt8` | 内部发布 | 仅在控制源变化时发布，供运动控制器处理手柄优先级。 |
-| `/servo_controller/joint_trajectory` | `trajectory_msgs/msg/JointTrajectory` | 订阅 | `left_servo_joint`、`right_servo_joint` 目标位置。 |
+| `/servo_controller/joint_trajectory` | `trajectory_msgs/msg/JointTrajectory` | 订阅 | `upper_servo_joint`、`lower_servo_joint` 目标位置。 |
 
 ROS2 服务与坐标系：
 
 | 名称 | 类型/关系 | 说明 |
 | --- | --- | --- |
 | `/reset_odometry` | `std_srvs/srv/Empty` | 清零 MCU 里程计。 |
-| `/drive_on_heading` | `nav2_msgs/action/DriveOnHeading` | 按里程计闭环行驶指定距离。 |
-| `/spin` | `nav2_msgs/action/Spin` | 按里程计闭环旋转指定角度。 |
+| `/drive_on_heading` | `nav2_msgs/action/DriveOnHeading` | 由 Nav2 Behavior Server 提供。 |
+| `/spin` | `nav2_msgs/action/Spin` | 由 Nav2 Behavior Server 提供。 |
 | 动态 TF | `odom -> base_link` | 小车三维位姿。 |
 | URDF 固定关节 | `base_link -> imu_link` | IMU 安装关系，由 `robot_state_publisher` 发布。 |
 | URDF 固定关节 | `base_link -> ultrasonic_link` | 超声安装关系，由 `robot_state_publisher` 发布。 |
@@ -111,14 +112,14 @@ ROS2 相关参数：
 
 | 文件 | 作用 |
 | --- | --- |
-| `rpi_host/config/chassis_params.yaml` | MCU 标定参数，bridge 启动时整组下发并回读校验。 |
-| `rpi_host/ros2_ws/src/smallcar_ros_and_mcu_bridge/config/bridge.yaml` | 串口、坐标系、舵机映射、ROS 发布开关和传感器属性。 |
-| `rpi_host/ros2_ws/src/small_car_motion_controller/config/motion_controller.yaml` | 定距、定角、减速、容差、超时和避障参数。 |
-| `rpi_host/ros2_ws/src/small_car_description/urdf/robot_geometry.xacro` | IMU、超声、相机、树莓派、MCU 等硬件安装坐标。 |
+| `rpi_host/src/small_car_base/config/chassis.yaml` | MCU 标定参数，启动时整组下发并回读校验。 |
+| `rpi_host/src/small_car_base/config/base.yaml` | 串口、硬限幅、安全、云台和传感器参数。 |
+| `rpi_host/src/small_car_nav2/config/nav2.yaml` | Nav2 Planner、Controller、Behavior 和速度链参数。 |
+| `rpi_host/src/small_car_description/urdf/robot_geometry.xacro` | 硬件安装坐标。 |
 
-`/cmd_vel` 使用 ROS2 标准单位。运动控制器完成命令仲裁和加速度限制，通过
-`/cmd_vel_mcu` 交给 bridge；bridge 转换为 `mm/s` 和 `mrad/s` 后使用协议 v2
-下发，MCU 再通过左右轮速度闭环执行。
+`/cmd_vel` 使用 ROS2 标准单位和 `TwistStamped`。Nav2 完成正常速度平滑及
+碰撞监控，底盘节点执行最终硬限幅和失效保护，然后转换为 `mm/s`、`mrad/s`
+通过协议 v2 下发。
 
 ## WSL 远程连接 ROS2
 
@@ -132,7 +133,7 @@ bash /mnt/d/stm32/demo/small_car_f407/scripts/setup_wsl_ros_env.sh
 
 若 WSL 中执行 `ip -4 -brief address` 只显示 `lo`，请在 PowerShell 中执行 `wsl --shutdown`，然后重新进入 WSL。
 
-确认树莓派 bridge 已被发现：
+确认树莓派底盘节点已被发现：
 
 ```bash
 ros2 topic info /cmd_vel --verbose
@@ -141,11 +142,12 @@ ros2 topic info /cmd_vel --verbose
 输出中的 `Subscription count` 应为 `1`。Fast DDS 跨 WSL 时节点名可能显示为 `NODE_NAME_UNKNOWN`，不影响话题收发。
 
 MCU 已使用左右轮速度闭环执行树莓派下发的物理速度。起步 PWM、PI、加速度限制和
-左右轮补偿统一在 `rpi_host/config/chassis_params.yaml` 中调整。
+左右轮补偿统一在 `rpi_host/src/small_car_base/config/chassis.yaml` 中调整。
 
 ## Hermes 语音控制
 
-语音程序和 ROS2 bridge 由同一容器管理。语音程序只执行本地规则明确识别出的动作：
+语音运动程序调用 Nav2 标准 Action，因此要等 Nav2 安装并启动后再启用。
+语音程序只执行本地规则明确识别出的动作：
 定距命令调用 `/drive_on_heading`，定角命令调用 `/spin`，停止命令发布零速度。
 
 | 语音 | 动作 |
@@ -165,7 +167,7 @@ cd ~/small_car_f407/rpi_host/ros2
 docker compose logs -f | grep -E "Voice daemon|Transcript|Intent|Motion"
 ```
 
-不经过麦克风和语音识别，直接验证“本地意图规则 → ROS2 Action → `/cmd_vel_mcu` → MCU →
+不经过麦克风和语音识别，直接验证“本地意图规则 → Nav2 Action → `/cmd_vel` → MCU →
 编码器”链路：
 
 ```bash
@@ -174,14 +176,14 @@ docker compose exec small_car_ros2 \
 ```
 
 该命令使用正式语音解析和运动 Action，完成、取消或超时后都会停车。动作速度、
-减速、容差和超时由 `motion_controller.yaml` 管理；语音模块只提供目标距离或角度。
+减速、容差和超时由 `small_car_nav2/config/nav2.yaml` 管理；语音模块只提供目标距离或角度。
 
 ## 参数调试
 
 修改：
 
 ```text
-rpi_host/config/chassis_params.yaml
+rpi_host/src/small_car_base/config/chassis.yaml
 ```
 
 同步并生效：
@@ -190,7 +192,7 @@ rpi_host/config/chassis_params.yaml
 .\scripts\sync_rpi_host.ps1
 ```
 
-查看 bridge 是否下发成功：
+查看底盘节点是否下发成功：
 
 ```bash
 cd ~/small_car_f407/rpi_host/ros2
@@ -205,7 +207,7 @@ applied and verified 23 chassis parameters
 
 ## 独立串口工具
 
-使用前先停止 ROS2 bridge：
+使用前先停止 ROS2 底盘：
 
 ```bash
 cd ~/small_car_f407/rpi_host/ros2
@@ -216,11 +218,11 @@ docker compose down
 
 ```bash
 cd ~/small_car_f407/rpi_host
-./build/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra --odom
-./build/sensor_monitor --port /dev/ttyACM0 --all --interval-ms 300
+./build-host/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra --odom
+./build-host/sensor_monitor --port /dev/ttyACM0 --all --interval-ms 300
 ```
 
-`sensor_monitor` 默认会尝试下发 `config/chassis_params.yaml`，如果参数校验失败只打印警告并继续显示数据。需要把参数失败当作错误时，追加：
+`sensor_monitor` 默认会尝试下发 `src/small_car_base/config/chassis.yaml`，如果参数校验失败只打印警告并继续显示数据。需要把参数失败当作错误时，追加：
 
 ```bash
 --strict-config
@@ -229,10 +231,10 @@ cd ~/small_car_f407/rpi_host
 控制命令：
 
 ```bash
-./build/small_car_host_cli --port /dev/ttyACM0 stop
-./build/small_car_host_cli --port /dev/ttyACM0 drive 200 0
-./build/small_car_host_cli --port /dev/ttyACM0 servo 1500 1500
-./build/small_car_host_cli --port /dev/ttyACM0 odom-reset
+./build-host/small_car_host_cli --port /dev/ttyACM0 stop
+./build-host/small_car_host_cli --port /dev/ttyACM0 drive 200 0
+./build-host/small_car_host_cli --port /dev/ttyACM0 servo 1500 1500
+./build-host/small_car_host_cli --port /dev/ttyACM0 odom-reset
 ```
 
 ## WiFi 排查
@@ -273,7 +275,7 @@ systemctl status small-car-mcu-recovery.path
 journalctl -u small-car-mcu-recovery.service -f
 ```
 
-bridge 收到 `/cmd_vel` 但串口写入失败时会自动创建恢复请求。宿主机随后复位
+底盘节点收到 `/cmd_vel` 但串口写入失败时会自动创建恢复请求。宿主机随后复位
 CH9102、等待串口重新枚举并重建 ROS2 容器，无需手工重启树莓派。
 
 ## 相机测试
@@ -288,9 +290,9 @@ V4L2 抓图：
 
 ```bash
 cd ~/small_car_f407/rpi_host
-cmake --build build --target v4l2_capture
-./build/v4l2_capture /dev/video0 mjpg ~/small_car_f407/v4l2_mjpg.jpg 1920 1080
-./build/v4l2_capture /dev/video0 yuyv ~/small_car_f407/v4l2_yuyv.yuyv 1920 1080
+cmake --build build-host --target v4l2_capture
+./build-host/v4l2_capture /dev/video0 mjpg ~/small_car_f407/v4l2_mjpg.jpg 1920 1080
+./build-host/v4l2_capture /dev/video0 yuyv ~/small_car_f407/v4l2_yuyv.yuyv 1920 1080
 ```
 
 ## 音频测试

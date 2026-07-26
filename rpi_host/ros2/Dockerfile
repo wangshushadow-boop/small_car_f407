@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-kilted-ament-index-python \
       ros-kilted-diagnostic-msgs \
       ros-kilted-nav-msgs \
-      ros-kilted-nav2-msgs \
+      ros-kilted-navigation2 \
+      ros-kilted-nav2-bringup \
       ros-kilted-robot-state-publisher \
       ros-kilted-sensor-msgs \
       ros-kilted-std-msgs \
@@ -25,4 +26,4 @@ RUN pip3 install --break-system-packages --no-cache-dir \
       --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
       --timeout 120 --retries 10 sounddevice
 
-WORKDIR /workspace/rpi_host/ros2_ws
+WORKDIR /workspace/rpi_host
