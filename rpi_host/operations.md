@@ -112,8 +112,8 @@ ROS2 相关参数：
 
 | 文件 | 作用 |
 | --- | --- |
-| `rpi_host/src/small_car_base/config/chassis.yaml` | MCU 标定参数，启动时整组下发并回读校验。 |
-| `rpi_host/src/small_car_base/config/base.yaml` | 串口、硬限幅、安全、云台和传感器参数。 |
+| `rpi_host/src/small_car_base/config/chassis.yaml` | ROS 与 MCU 共用的底盘物理约束、里程计和闭环标定参数；启动时整组下发并回读校验。 |
+| `rpi_host/src/small_car_base/config/base.yaml` | 串口、命令时序、坐标系、传感器描述、协方差和云台映射参数。 |
 | `rpi_host/src/small_car_nav2/config/nav2.yaml` | Nav2 Planner、Controller、Behavior 和速度链参数。 |
 | `rpi_host/src/small_car_description/urdf/robot_geometry.xacro` | 硬件安装坐标。 |
 

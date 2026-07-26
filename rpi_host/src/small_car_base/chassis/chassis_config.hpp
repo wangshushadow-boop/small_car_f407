@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace small_car {
@@ -35,6 +36,13 @@ std::string DefaultChassisConfigPath(const char* executable);
  * @throws std::runtime_error 文件缺失、字段缺失、重复或数值越界时抛出。
  */
 std::vector<ChassisParameter> LoadChassisConfig(const std::string& path);
+
+/**
+ * @brief 按 YAML 键名取得已校验参数值。
+ * @throws std::runtime_error 参数集合中不存在指定名称时抛出。
+ */
+std::int32_t ChassisParameterValue(
+    const std::vector<ChassisParameter>& parameters, std::string_view name);
 
 /**
  * @brief 逐项下发参数并回读校验。

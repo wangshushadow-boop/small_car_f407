@@ -56,6 +56,14 @@ if(BUILD_TESTING)
   add_executable(module_test control/module_test.cpp)
   target_link_libraries(module_test PRIVATE small_car_core)
   add_test(NAME module_test COMMAND module_test)
+
+  add_executable(chassis_config_test chassis/chassis_config_test.cpp)
+  target_link_libraries(chassis_config_test PRIVATE small_car_core)
+  add_test(
+    NAME chassis_config_test
+    COMMAND chassis_config_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/config/chassis.yaml
+  )
 endif()
 
 install(TARGETS small_car_core small_car_base_node

@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
@@ -112,10 +113,7 @@ class SmallCarBaseNode : public rclcpp::Node {
     declare_parameter<std::string>("serial_port", "/dev/small_car_mcu");
     declare_parameter<int>("baud_rate", 115200);
     declare_parameter<std::string>("chassis_config", "");
-    declare_parameter<double>("max_linear_speed_mps", 0.6);
-    declare_parameter<double>("max_angular_speed_rad_s", 2.0);
     declare_parameter<int>("cmd_vel_timeout_ms", 500);
-    declare_parameter<double>("front_stop_distance_m", 0.2);
     declare_parameter<double>("command_rate_hz", 20.0);
     declare_parameter<std::string>(
         "mcu_recovery_request",
@@ -162,12 +160,21 @@ class SmallCarBaseNode : public rclcpp::Node {
           ament_index_cpp::get_package_share_directory("small_car_base") +
           "/config/chassis.yaml";
     }
-    max_linear_speed_mps_ = get_parameter("max_linear_speed_mps").as_double();
-    max_angular_speed_rad_s_ = get_parameter("max_angular_speed_rad_s").as_double();
+    chassis_parameters_ = small_car::LoadChassisConfig(chassis_config_);
+    max_linear_speed_mps_ =
+        static_cast<double>(small_car::ChassisParameterValue(
+            chassis_parameters_, "max_linear_speed_mm_s")) /
+        1000.0;
+    max_angular_speed_rad_s_ =
+        static_cast<double>(small_car::ChassisParameterValue(
+            chassis_parameters_, "max_angular_speed_mrad_s")) /
+        1000.0;
+    front_stop_distance_m_ =
+        static_cast<double>(small_car::ChassisParameterValue(
+            chassis_parameters_, "ultra_near_distance_mm")) /
+        1000.0;
     cmd_vel_timeout_ =
         std::chrono::milliseconds(get_parameter("cmd_vel_timeout_ms").as_int());
-    front_stop_distance_m_ =
-        get_parameter("front_stop_distance_m").as_double();
     command_rate_hz_ = get_parameter("command_rate_hz").as_double();
     mcu_recovery_request_ = get_parameter("mcu_recovery_request").as_string();
     odom_frame_ = get_parameter("odom_frame").as_string();
@@ -224,9 +231,8 @@ class SmallCarBaseNode : public rclcpp::Node {
 
   /** 从 YAML 加载参数并逐项写入 MCU；失败时保留桥接功能用于现场排查。 */
   void ApplyControllerConfig() {
-    const auto parameters = small_car::LoadChassisConfig(chassis_config_);
     std::string error;
-    if (!small_car::ApplyChassisConfig(&client_, parameters,
+    if (!small_car::ApplyChassisConfig(&client_, chassis_parameters_,
                                        std::chrono::milliseconds(500), &error)) {
       /*
        * 参数下发失败不能阻止 ROS2 bridge 启动。
@@ -237,7 +243,7 @@ class SmallCarBaseNode : public rclcpp::Node {
       return;
     }
     RCLCPP_INFO(get_logger(), "applied and verified %zu chassis parameters",
-                parameters.size());
+                chassis_parameters_.size());
   }
 
   /**
@@ -665,6 +671,7 @@ class SmallCarBaseNode : public rclcpp::Node {
   small_car::CarClient client_;
   std::string serial_port_;
   std::string chassis_config_;
+  std::vector<small_car::ChassisParameter> chassis_parameters_;
   std::string odom_frame_;
   std::string base_frame_;
   std::string imu_frame_;

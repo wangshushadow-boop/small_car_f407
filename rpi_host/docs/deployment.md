@@ -63,7 +63,3 @@ ros2 topic echo /diagnostics
 
 当前没有地图定位，Nav2 使用 odom-only 滚动代价地图。正式导航前需要接入
 SLAM 或 Map Server + AMCL，并切换到 `map -> odom` 配置。
-
-截至 2026-07-26，MCU 诊断显示超声波为 `timeout`、`ultrasonic_mm=-1`。
-因此 `/ultrasonic/front` 当前没有数据，部署虽然已运行，但在修复传感器前
-不得依赖 Nav2 Range Layer 或 Collision Monitor 作为唯一避障手段。

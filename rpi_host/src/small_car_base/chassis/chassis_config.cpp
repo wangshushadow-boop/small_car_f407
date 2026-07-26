@@ -126,6 +126,16 @@ std::vector<ChassisParameter> LoadChassisConfig(const std::string& path) {
   return result;
 }
 
+std::int32_t ChassisParameterValue(
+    const std::vector<ChassisParameter>& parameters, std::string_view name) {
+  for (const auto& parameter : parameters) {
+    if (parameter.name == name) {
+      return parameter.value;
+    }
+  }
+  throw ConfigError("missing loaded parameter " + std::string(name));
+}
+
 bool ApplyChassisConfig(CarClient* client,
                         const std::vector<ChassisParameter>& parameters,
                         std::chrono::milliseconds timeout,

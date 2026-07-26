@@ -1,49 +1,103 @@
 small_car_base:
   ros__parameters:
+    # MCU 串口设备路径；Docker Compose 将稳定的 USB by-id 设备映射到此路径。
     serial_port: /dev/small_car_mcu
+
+    # MCU 串口波特率，必须与 STM32 USART3 配置保持一致。
     baud_rate: 115200
-    # /cmd_vel 使用 TwistStamped；底盘节点只执行最终硬限幅和失效保护。
-    max_linear_speed_mps: 0.6
-    max_angular_speed_rad_s: 2.0
+
+    # 最后一次有效 /cmd_vel 到达后允许继续执行的最长时间，单位 ms；
+    # 超时后节点主动向 MCU 发送停车命令。
     cmd_vel_timeout_ms: 500
-    front_stop_distance_m: 0.20
+
+    # ROS 节点向 MCU 刷新有效速度命令的频率，单位 Hz；
+    # 应明显快于 MCU 的 300 ms 主机命令看门狗。
     command_rate_hz: 20.0
-    # 串口写失败时通知树莓派宿主机复位 USB 并重建容器。
+
+    # 串口写入失败时创建的恢复请求文件；
+    # 宿主机 systemd.path 监控该文件并执行 USB 复位和容器重建。
     mcu_recovery_request: /workspace/rpi_host/runtime/mcu_recovery.request
 
+    # nav_msgs/Odometry 和动态 TF 使用的父坐标系名称。
     odom_frame: odom
+
+    # 机器人底盘主体坐标系名称，也是 /odom 的 child_frame_id。
     base_frame: base_link
+
+    # sensor_msgs/Imu 消息使用的安装坐标系名称，需与 URDF 一致。
     imu_frame: imu_link
+
+    # sensor_msgs/Range 消息使用的超声波安装坐标系名称，需与 URDF 一致。
     ultrasonic_frame: ultrasonic_link
+
+    # 是否发布 odom -> base_link 动态 TF；由其它定位节点发布时应关闭以避免冲突。
     publish_tf: true
-    # 调试接口统一位于 /debug；关闭时不创建原始 IMU publisher。
+
+    # 是否创建 /debug/imu/raw 原始 IMU 调试 Topic；正常运行时保持关闭。
     debug_enabled: false
-    # RViz 需要轮子和舵机关节状态；关闭后 MCU 不再上传轮速调试流。
+
+    # 是否发布四轮和上下云台的 /joint_states；RViz 显示机器人模型时需要开启。
     publish_joint_states: true
 
-    # 65 mm 车轮的半径；实测后可继续标定。
+    # 车轮物理半径，单位 m；用于把 MCU 上报的轮侧线速度换算为关节角速度。
     wheel_radius_m: 0.0325
+
+    # 超声波有效测距下限，单位 m；写入 sensor_msgs/Range.min_range。
     ultrasonic_min_range_m: 0.02
+
+    # 超声波有效测距上限，单位 m；写入 sensor_msgs/Range.max_range。
     ultrasonic_max_range_m: 4.0
+
+    # 超声波水平视场角，单位 rad；写入 sensor_msgs/Range.field_of_view。
     ultrasonic_field_of_view_rad: 0.52
 
-    # 初始协方差，完成重复性实验后按实测方差调整。
+    # /odom 中 x、y、z 位置协方差的初始对角值，单位 m²。
     odom_position_variance: 0.01
+
+    # /odom 中 roll、pitch、yaw 姿态协方差的初始对角值，单位 rad²。
     odom_orientation_variance: 0.02
+
+    # /odom 中线速度协方差的初始对角值，单位 (m/s)²。
     odom_linear_velocity_variance: 0.04
+
+    # /odom 中角速度协方差的初始对角值，单位 (rad/s)²。
     odom_angular_velocity_variance: 0.05
+
+    # /imu/data 中三轴线加速度协方差的初始对角值，单位 (m/s²)²。
     imu_acceleration_variance: 0.1
+
+    # /imu/data 中三轴角速度协方差的初始对角值，单位 (rad/s)²。
     imu_angular_velocity_variance: 0.02
+
+    # /imu/data 中姿态协方差的初始对角值，单位 rad²。
     imu_orientation_variance: 0.02
 
-    # 舵机弧度与 PWM 的线性映射。正负方向可用 sign 调整。
+    # 上云台关节处于 0 rad 时的舵机中心脉宽，单位 us。
     upper_servo_center_us: 1500
+
+    # 上云台允许输出的最小舵机脉宽，单位 us。
     upper_servo_min_us: 800
+
+    # 上云台允许输出的最大舵机脉宽，单位 us。
     upper_servo_max_us: 2300
+
+    # 上云台从最小到最大脉宽对应的总机械角度范围，单位 rad。
     upper_servo_range_rad: 3.14159
+
+    # 上云台 ROS 关节角到 PWM 方向的符号；安装方向相反时设为 -1.0。
     upper_servo_sign: 1.0
+
+    # 下云台关节处于 0 rad 时的舵机中心脉宽，单位 us。
     lower_servo_center_us: 1250
+
+    # 下云台允许输出的最小舵机脉宽，单位 us。
     lower_servo_min_us: 800
+
+    # 下云台允许输出的最大舵机脉宽，单位 us。
     lower_servo_max_us: 1700
+
+    # 下云台从最小到最大脉宽对应的总机械角度范围，单位 rad。
     lower_servo_range_rad: 3.14159
+
+    # 下云台 ROS 关节角到 PWM 方向的符号；安装方向相反时设为 -1.0。
     lower_servo_sign: 1.0

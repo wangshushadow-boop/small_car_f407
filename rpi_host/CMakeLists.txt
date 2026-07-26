@@ -66,6 +66,13 @@ if(UNIX)
   target_link_libraries(sensor_monitor
     PRIVATE small_car_host
   )
+
+  add_executable(chassis_config_test
+    src/small_car_base/chassis/chassis_config_test.cpp
+  )
+  target_link_libraries(chassis_config_test
+    PRIVATE small_car_host
+  )
 endif()
 
 add_executable(protocol_test
@@ -85,6 +92,13 @@ target_include_directories(module_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 enable_testing()
 add_test(NAME protocol_test COMMAND protocol_test)
 add_test(NAME module_test COMMAND module_test)
+if(UNIX)
+  add_test(
+    NAME chassis_config_test
+    COMMAND chassis_config_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/small_car_base/config/chassis.yaml
+  )
+endif()
 
 if(SMALL_CAR_ENABLE_OPENCV)
   find_package(OpenCV REQUIRED COMPONENTS core videoio imgcodecs)

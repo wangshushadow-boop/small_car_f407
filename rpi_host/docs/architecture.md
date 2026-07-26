@@ -12,8 +12,6 @@
 
 当前阶段启动 `small_car_base_node`，并临时使用标准
 `robot_state_publisher` 进程发布机器人描述。`nav2_container` 的源码配置和
-启动骨架已经准备好，但 Nav2 软件包暂不安装；安装后
-`robot_state_publisher` 会移入该容器。
 
 语音、标定和串口监视工具是运维工具，不得直接打开正在被
 `small_car_base_node` 占用的串口。
