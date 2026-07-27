@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,6 +44,26 @@ std::vector<ChassisParameter> LoadChassisConfig(const std::string& path);
  */
 std::int32_t ChassisParameterValue(
     const std::vector<ChassisParameter>& parameters, std::string_view name);
+
+/**
+ * @brief 按名称和数值构造一项参数，并校验名称及合法范围。
+ * @param error 校验失败时写入可读错误原因，可以为 nullptr。
+ */
+std::optional<ChassisParameter> MakeChassisParameter(
+    std::string_view name, std::int32_t value, std::string* error);
+
+/** @return 指定参数是否允许通过 ROS Parameter Server 临时调整。 */
+bool IsRuntimeTunableChassisParameter(std::string_view name);
+
+/**
+ * @brief 下发一项参数并立即回读校验。
+ * @param actual 回读成功时写入 MCU 实际值，可以为 nullptr。
+ */
+bool ApplyChassisParameter(CarClient* client,
+                           const ChassisParameter& parameter,
+                           std::chrono::milliseconds timeout,
+                           std::int32_t* actual,
+                           std::string* error);
 
 /**
  * @brief 逐项下发参数并回读校验。

@@ -1,0 +1,87 @@
+# Build outputs
+build/
+cmake-build-*/
+rpi_host/build*/
+rpi_host/install/
+rpi_host/log/
+out/
+bin/
+obj/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+install_manifest.txt
+
+# Firmware artifacts
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.lst
+*.su
+*.o
+*.obj
+*.a
+*.d
+*.dep
+
+# STM32CubeIDE / Eclipse local metadata
+.settings/
+.metadata/
+.cproject
+.project
+.launches/
+*.launch
+
+# Keil MDK generated files
+Listings/
+Objects/
+RTE/
+*.uvguix.*
+*.uvoptx
+*.uvprojx.bak
+*.scvd
+*.axf
+*.htm
+*.lnp
+*.crf
+*.iex
+*.sct
+
+# IAR generated files
+Debug/
+Release/
+settings/
+*.ewt
+*.ewd
+*.ewp
+*.eww
+*.dep
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs and temporary files
+.codex_tmp/
+*.log
+*.tmp
+*.bak
+*.orig
+__pycache__/
+rpi_host/runtime/*.request

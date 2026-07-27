@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -25,6 +26,7 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
@@ -161,6 +163,7 @@ class SmallCarBaseNode : public rclcpp::Node {
           "/config/chassis.yaml";
     }
     chassis_parameters_ = small_car::LoadChassisConfig(chassis_config_);
+    DeclareRuntimeChassisParameters();
     max_linear_speed_mps_ =
         static_cast<double>(small_car::ChassisParameterValue(
             chassis_parameters_, "max_linear_speed_mm_s")) /
@@ -204,6 +207,29 @@ class SmallCarBaseNode : public rclcpp::Node {
     if (max_linear_speed_mps_ <= 0.0 || max_angular_speed_rad_s_ <= 0.0 ||
         command_rate_hz_ <= 0.0 || wheel_radius_m_ <= 0.0) {
       throw std::runtime_error("ROS2 bridge contains a non-positive scale parameter");
+    }
+  }
+
+  /** 从 chassis.yaml 注册允许在线调整的闭环和轮侧参数。 */
+  void DeclareRuntimeChassisParameters() {
+    for (auto& parameter : chassis_parameters_) {
+      if (!small_car::IsRuntimeTunableChassisParameter(parameter.name)) {
+        continue;
+      }
+      const auto value = declare_parameter<std::int64_t>(
+          parameter.name, static_cast<std::int64_t>(parameter.value));
+      if (value < std::numeric_limits<std::int32_t>::min() ||
+          value > std::numeric_limits<std::int32_t>::max()) {
+        throw std::runtime_error("runtime chassis parameter is outside int32: " +
+                                 parameter.name);
+      }
+      std::string error;
+      const auto validated = small_car::MakeChassisParameter(
+          parameter.name, static_cast<std::int32_t>(value), &error);
+      if (!validated.has_value()) {
+        throw std::runtime_error(error);
+      }
+      parameter.value = validated->value;
     }
   }
 
@@ -282,6 +308,9 @@ class SmallCarBaseNode : public rclcpp::Node {
         std::bind(&SmallCarBaseNode::OnResetOdometry, this,
                   std::placeholders::_1,
                   std::placeholders::_2));
+    parameter_callback_handle_ = add_on_set_parameters_callback(
+        std::bind(&SmallCarBaseNode::OnSetParameters, this,
+                  std::placeholders::_1));
 
     poll_timer_ = create_wall_timer(std::chrono::milliseconds(5),
                                     std::bind(&SmallCarBaseNode::PollController, this));
@@ -427,6 +456,74 @@ class SmallCarBaseNode : public rclcpp::Node {
     if (!client_.SendOdomReset()) {
       RCLCPP_ERROR(get_logger(), "failed to send odometry reset request");
     }
+  }
+
+  /** 同步处理一项易变参数；MCU 回读一致后才允许 ROS 参数值更新。 */
+  rcl_interfaces::msg::SetParametersResult OnSetParameters(
+      const std::vector<rclcpp::Parameter>& parameters) {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+
+    const auto tunable_count = static_cast<std::size_t>(std::count_if(
+        parameters.begin(), parameters.end(), [](const auto& parameter) {
+          return small_car::IsRuntimeTunableChassisParameter(
+              parameter.get_name());
+        }));
+    if (tunable_count == 0) {
+      return result;
+    }
+    if (tunable_count != 1) {
+      result.successful = false;
+      result.reason = "set one runtime chassis parameter at a time";
+      return result;
+    }
+
+    const auto iterator = std::find_if(
+        parameters.begin(), parameters.end(), [](const auto& parameter) {
+          return small_car::IsRuntimeTunableChassisParameter(
+              parameter.get_name());
+        });
+    if (iterator->get_type() != rclcpp::ParameterType::PARAMETER_INTEGER) {
+      result.successful = false;
+      result.reason = iterator->get_name() + " requires an integer value";
+      return result;
+    }
+
+    const auto value = iterator->as_int();
+    if (value < std::numeric_limits<std::int32_t>::min() ||
+        value > std::numeric_limits<std::int32_t>::max()) {
+      result.successful = false;
+      result.reason = iterator->get_name() + " is outside int32 range";
+      return result;
+    }
+
+    std::string error;
+    const auto parameter = small_car::MakeChassisParameter(
+        iterator->get_name(), static_cast<std::int32_t>(value), &error);
+    if (!parameter.has_value()) {
+      result.successful = false;
+      result.reason = error;
+      return result;
+    }
+
+    std::int32_t actual = 0;
+    if (!small_car::ApplyChassisParameter(
+            &client_, *parameter, std::chrono::milliseconds(800), &actual,
+            &error)) {
+      result.successful = false;
+      result.reason = error;
+      return result;
+    }
+
+    for (auto& loaded : chassis_parameters_) {
+      if (loaded.id == parameter->id) {
+        loaded.value = actual;
+        break;
+      }
+    }
+    RCLCPP_INFO(get_logger(), "runtime chassis parameter applied: %s=%d",
+                parameter->name.c_str(), actual);
+    return result;
   }
 
   /** 高频串口轮询入口；每次轮询后尝试发布所有已经更新的消息类型。 */
@@ -740,6 +837,8 @@ class SmallCarBaseNode : public rclcpp::Node {
   rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_sub_;
   rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr servo_sub_;
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr reset_odom_service_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
+      parameter_callback_handle_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   rclcpp::TimerBase::SharedPtr poll_timer_;
   rclcpp::TimerBase::SharedPtr command_timer_;

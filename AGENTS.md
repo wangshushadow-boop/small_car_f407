@@ -1,67 +1,67 @@
-# Codex 项目说明
+# Repository Guidelines
 
-本文件供 Codex 或其他 AI 编程助手在处理本仓库前阅读。这里记录项目约定、构建方式和修改注意事项。
+## Project Structure & Module Organization
 
-## 项目概况
+This workspace contains two cooperating components:
 
-- 项目名称：`small_car_f407`
-- 目标平台：STM32F407
-- 工程来源：STM32CubeMX 生成
-- 构建系统：CMake + Ninja
-- 主要中间件：FreeRTOS / CMSIS-RTOS2
-- 编译工具链：`arm-none-eabi-gcc`
+- `small_car_f407/` is the STM32F407 firmware. Application code lives under
+  `Core/Modules/<Area>/{Inc,Src}`; CubeMX startup and peripheral code is in
+  `Core/Inc` and `Core/Src`. `Drivers/`, `Middlewares/`, and `USB_HOST/` contain
+  vendor or generated code. Hardware notes are in `small_car_f407/docs/`.
+- `ros2_host/` is the Raspberry Pi/ROS 2 host. ROS packages are under `src/`,
+  standalone diagnostics under `apps/`, deployment files under `ros2/` and
+  `systemd/`, and operational documentation under `docs/`.
 
-## 常用命令
+Keep protocol changes synchronized between `Core/Modules/Comm` and
+`ros2_host/src/small_car_base/protocol`.
 
-Debug 构建：
+## Build, Test, and Development Commands
+
+From `small_car_f407/`:
 
 ```powershell
 cmake --preset Debug
 cmake --build --preset Debug
 ```
 
-Release 构建：
+Use the `Release` preset for size/performance checks. The ARM GCC toolchain,
+CMake 3.22+, and Ninja are required.
 
-```powershell
-cmake --preset Release
-cmake --build --preset Release
+From `ros2_host/` on Linux/WSL:
+
+```bash
+cmake -S . -B build && cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-如果 CMake 提示找不到 `arm-none-eabi-gcc` 或 `arm-none-eabi-g++`，说明 ARM GCC 工具链未安装或未加入 `PATH`。
+For the ROS workspace, source ROS 2 Kilted and run the `colcon` command documented
+in `ros2_host/README.md`. Use `docker compose -f ros2/compose.yaml up --build -d`
+for the hardware-integrated container.
 
-## 目录约定
+## Coding Style & Naming Conventions
 
-- `Core/Inc`：应用头文件和 CubeMX 生成头文件。
-- `Core/Src`：应用源码和 CubeMX 生成源码。
-- `Drivers/`：STM32 HAL 与 CMSIS 文件，通常不手工修改。
-- `Middlewares/`：第三方中间件，通常不手工修改。
-- `cmake/`：工具链和 CubeMX CMake 集成文件。
-- `small_car_f407.ioc`：CubeMX 配置文件。
+Follow `small_car_f407/.clang-format`: Google style, 2 spaces, no tabs, and a
+120-column limit. Firmware is C11; host code is C++17. Use `snake_case` for C
+functions/locals, `UpperCamelCase` for C++ types/functions, and
+`UPPER_SNAKE_CASE` for macros. Preserve existing HAL/CubeMX names. Put custom
+changes to generated files only inside `USER CODE BEGIN/END` blocks, and do not
+reformat vendor-generated files wholesale.
 
-## 修改规则
+## Testing Guidelines
 
-- 修改 CubeMX 可能重新生成的文件时，只在 `USER CODE BEGIN/END` 区域内添加自定义代码。
-- 不对 CubeMX 生成文件做整文件格式化，避免引入大量无关 diff。
-- 新增业务模块优先放在 `Core/Inc` 和 `Core/Src`。
-- 不提交 `build/`、`.elf`、`.bin`、`.hex`、`.map`、目标文件或 IDE 本地配置。
-- 硬件资料默认位于仓库外，只有需要版本管理的原理图、接口说明或资源分配表才加入仓库。
+Host tests are dependency-light `*_test.cpp` executables registered with CTest.
+Add focused tests beside the module they cover and include malformed/boundary
+protocol cases. Run the host CTest suite and a firmware Debug build before every
+submission. Hardware-facing changes should also document the board, connection,
+and observed result; confirmed fixes belong in `small_car_f407/docs/qa.md`.
 
-## 编码规范
+## Commit & Pull Request Guidelines
 
-- 人工编写的新 C/C++ 代码采用 Google 风格，配置见 `.clang-format`。
-- C 代码使用 C11。
-- 缩进使用 2 个空格，不使用 Tab。
-- HAL/CubeMX 回调和生成函数保持原有 STM32 命名。
-- 私有函数和局部变量优先使用 `snake_case`。
-- 宏和编译期常量使用 `UPPER_SNAKE_CASE`。
-- 文件内私有函数和数据优先使用 `static`。
-
-## 验证建议
-
-完成代码修改后，优先执行 Debug 构建。涉及优化、体积或发布固件时，再执行 Release 构建。
-
-## 问题记录
-
-- 问题确认解决后，在 `docs/qa.md` 表格末尾追加一条中文记录。
-- 每条只写问题现象、确定原因和最终解决方案，不记录尚未验证的猜测。
-- 描述保持简短；同一根因的重复问题合并到已有条目。
+History uses short, imperative Chinese subjects such as `优化底盘yaml参数` and
+`修复ROS与MCU双向通信链路`. Keep each commit limited to one feature or fix and
+name the affected module or hardware interface. Pull requests should explain the
+behavioral change, list verification commands and hardware tests, link relevant
+issues, and call out `.ioc`, protocol, pinout, parameter, or launch-file changes.
+Attach logs or screenshots when they make hardware or RViz behavior reviewable.
+Never commit build directories, firmware binaries, maps, logs, or local IDE
+configuration.

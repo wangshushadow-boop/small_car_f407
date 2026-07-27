@@ -49,6 +49,8 @@ class CarClient {
   std::optional<Odometry> GetOdometry() const;
   std::optional<OdometryDebug> GetOdometryDebug() const;
   std::optional<ParamValue> GetParamValue() const;
+  /** 返回并清空最近一次参数回读，便于区分新旧响应。 */
+  std::optional<ParamValue> TakeParamValue();
   std::optional<Ack> GetLastAck() const;
 
  private:

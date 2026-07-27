@@ -89,6 +89,12 @@ std::optional<ParamValue> CarClient::GetParamValue() const {
   return param_value_;
 }
 
+std::optional<ParamValue> CarClient::TakeParamValue() {
+  const auto value = param_value_;
+  param_value_.reset();
+  return value;
+}
+
 std::optional<Ack> CarClient::GetLastAck() const {
   return last_ack_;
 }

@@ -1,9 +1,11 @@
-# Build outputs
-build/
-cmake-build-*/
-rpi_host/build*/
-rpi_host/install/
-rpi_host/log/
+# Component build outputs
+**/build/
+**/build-*/
+**/cmake-build-*/
+**/install/
+**/install-*/
+**/log/
+**/log-*/
 out/
 bin/
 obj/
@@ -31,57 +33,17 @@ install_manifest.txt
 *.d
 *.dep
 
-# STM32CubeIDE / Eclipse local metadata
+# IDE, OS, and temporary files
 .settings/
 .metadata/
-.cproject
-.project
-.launches/
-*.launch
-
-# Keil MDK generated files
-Listings/
-Objects/
-RTE/
-*.uvguix.*
-*.uvoptx
-*.uvprojx.bak
-*.scvd
-*.axf
-*.htm
-*.lnp
-*.crf
-*.iex
-*.sct
-
-# IAR generated files
-Debug/
-Release/
-settings/
-*.ewt
-*.ewd
-*.ewp
-*.eww
-*.dep
-
-# Editor and OS files
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
 .idea/
-*.swp
-*.swo
-Thumbs.db
-Desktop.ini
-.DS_Store
-
-# Logs and temporary files
 .codex_tmp/
+__pycache__/
+ros2_host/runtime/*.request
 *.log
 *.tmp
 *.bak
 *.orig
-__pycache__/
-rpi_host/runtime/*.request
+Thumbs.db
+Desktop.ini
+.DS_Store

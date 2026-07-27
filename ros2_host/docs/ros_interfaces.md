@@ -36,7 +36,34 @@
 | `/debug/nav2/front_stop_polygon` | Collision Monitor 可视化 | 按 Nav2 配置 |
 
 `debug_enabled=false` 时底盘节点不创建原始 IMU publisher。调试接口不得成为
-控制、定位或安全逻辑的输入。
+正常控制、定位或安全逻辑的依赖。
+
+## 运行时底盘参数
+
+以下易变参数由 `small_car_base` 的 ROS Parameter Server 提供：
+
+- `wheel_speed_closed_loop_enabled`
+- `wheel_speed_kp_x100`
+- `wheel_speed_ki_x100`
+- `wheel_speed_integral_limit`
+- `wheel_accel_limit_mm_s2`
+- `wheel_pwm_min`
+- `wheel_left_output_permille`
+- `wheel_right_output_permille`
+
+查看和调整参数：
+
+```bash
+ros2 param get /small_car_base wheel_pwm_min
+ros2 param set /small_car_base wheel_pwm_min 550
+```
+
+节点先校验整数类型和合法范围，再写入 MCU 并立即回读。只有回读值与请求值
+一致时 `ros2 param set` 才返回成功，随后 `ros2 param get` 显示新的运行值。
+也可以使用 RQt 的 Dynamic Reconfigure 插件进行可视化调参。
+
+运行时调整不修改 `chassis.yaml`，节点或 MCU 重启后恢复 YAML 配置。里程计、
+IMU、速度上限等标定或安全参数不开放在线修改。
 
 ## 已删除接口
 

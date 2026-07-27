@@ -11,6 +11,7 @@ find_package(ament_index_cpp REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
@@ -39,6 +40,7 @@ target_link_libraries(small_car_base_node PRIVATE
   ${diagnostic_msgs_TARGETS}
   ${geometry_msgs_TARGETS}
   ${nav_msgs_TARGETS}
+  ${rcl_interfaces_TARGETS}
   ${sensor_msgs_TARGETS}
   ${std_srvs_TARGETS}
   ${trajectory_msgs_TARGETS}

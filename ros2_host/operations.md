@@ -74,7 +74,7 @@ ros2 service call /reset_odometry std_srvs/srv/Empty "{}"
 
 ```bash
 ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/TwistStamped \
-  "{header: auto, twist: {linear: {x: 0.5}, angular: {z: 0.0}}}"
+  "{header: auto, twist: {linear: {x: 0.1}, angular: {z: 0.0}}}"
 ```
 
 发送停车命令：

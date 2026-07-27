@@ -4,6 +4,7 @@
 
 | 日期 | 问题现象 | 确定原因 | 解决方案 |
 | --- | --- | --- | --- |
+| 2026-07-26 | 临时调整 `wheel_pwm_min` 等底盘参数时，必须重启节点整组下发，异步 Topic 也容易错过 MCU 回读结果。 | ROS 节点没有同步的运行时参数入口，现有参数回读缓存也无法区分新旧响应。 | 将八项易变控制参数接入 `small_car_base` Parameter Server；`ros2 param set` 校验类型和范围后执行 SET，清除旧缓存再 GET，只有 MCU 回读一致才返回成功。 |
 | 2026-07-26 | ROS 节点与 MCU 对相同的速度上限和停车距离分别配置，修改时容易出现数值不一致。 | `base.yaml` 和 `chassis.yaml` 分别保存同一物理约束，节点与 MCU 各自读取。 | 以 `chassis.yaml` 为唯一来源，底盘节点启动时一次加载并换算为 ROS SI 单位，同时复用同一组参数下发 MCU；补全 `base.yaml` 字段注释并新增配置测试。 |
 | 2026-07-23 | WSL 中 `ros2` 不存在，或 `ros2 topic list` 长时间卡住。 | ROS2 环境只在子进程中生效，或旧 ROS2 daemon 保留了失效的 DDS 状态。 | 执行 `bash /mnt/d/stm32/demo/small_car_f407/scripts/setup_wsl_ros_env.sh`，由脚本配置环境并重建 daemon。若 WSL 只剩 `lo` 接口，先在 PowerShell 执行 `wsl --shutdown`。 |
 | 2026-07-23 | Docker 能收到 `/cmd_vel`，但小车不运动。 | CH9102 长时间通信后触发树莓派 xHCI 端点错误，bridge 显示 `serial_write=failed`；USB 重新枚举还会使容器设备映射失效。 | 空闲心跳降为 1 Hz；收到控制命令但串口写失败时，由 `small-car-mcu-recovery.path` 自动复位 USB 并重建容器。确认日志出现 `applied and verified 15 chassis parameters`、`/diagnostics` 显示 `serial_write=ok`，且运动时 `/joint_states` 轮速非零。 |
