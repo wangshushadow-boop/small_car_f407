@@ -9,7 +9,7 @@
 | `/cmd_vel` `Twist` | `/cmd_vel` `TwistStamped` |
 | `/cmd_vel_mcu` | 删除，改为进程内调用 |
 | `/control/source` | 删除，改为进程内状态 |
-| `/imu/data_raw` | `/debug/imu/raw` |
+| `/debug/imu/raw` | `/imu/data_raw` |
 | `left_servo_joint` | `upper_servo_joint` |
 | `right_servo_joint` | `lower_servo_joint` |
 | `bridge.yaml` + `motion_controller.yaml` | `small_car_base/config/base.yaml` |

@@ -37,7 +37,6 @@
 #include "host_link.h"
 #include "icm20948.h"
 #include "motor.h"
-#include "odometry.h"
 #include "oled.h"
 #include "raspi_link.h"
 #include "servo.h"
@@ -135,7 +134,6 @@ int main(void)
   DebugUart_PrintfIf(DEBUG_LOG_BOOT, "[BOOT] ICM20948 init status=%d\r\n", imu_status);
   Motor_Init();
   Encoder_Init();
-  Odometry_Init();
   Chassis_Init();
   Servo_Init();
   Ultrasonic_Init();

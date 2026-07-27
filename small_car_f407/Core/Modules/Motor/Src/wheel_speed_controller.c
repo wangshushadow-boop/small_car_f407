@@ -20,7 +20,12 @@
 #include "chassis_params.h"
 #include "encoder.h"
 #include "motor.h"
-#include "odometry.h"
+
+#define WHEEL_MM_PER_TICK_DEN 15600
+#define WHEEL_MOTOR_A_SIGN 1
+#define WHEEL_MOTOR_B_SIGN 1
+#define WHEEL_MOTOR_C_SIGN -1
+#define WHEEL_MOTOR_D_SIGN -1
 
 typedef struct {
   /* 上位机/运动控制器请求的最终轮侧速度，单位为 mm/s。 */
@@ -104,7 +109,7 @@ static int16_t EncoderDeltaToSpeed(int16_t first_delta,
   const int64_t numerator =
       (int64_t)tick_sum * params->odom_mm_per_tick_num * 1000;
   const int64_t denominator =
-      (int64_t)2 * ODOMETRY_MM_PER_TICK_DEN * dt_ms;
+      (int64_t)2 * WHEEL_MM_PER_TICK_DEN * dt_ms;
   return ClampI16((int32_t)(numerator / denominator), -3000, 3000);
 }
 
@@ -242,15 +247,15 @@ void WheelSpeedController_TaskStep(uint32_t dt_ms)
   const int16_t left_measured =
       EncoderDeltaToSpeed(encoder_a.delta,
                           encoder_b.delta,
-                          ODOMETRY_MOTOR_A_SIGN,
-                          ODOMETRY_MOTOR_B_SIGN,
+                          WHEEL_MOTOR_A_SIGN,
+                          WHEEL_MOTOR_B_SIGN,
                           dt_ms,
                           &params);
   const int16_t right_measured =
       EncoderDeltaToSpeed(encoder_c.delta,
                           encoder_d.delta,
-                          ODOMETRY_MOTOR_C_SIGN,
-                          ODOMETRY_MOTOR_D_SIGN,
+                          WHEEL_MOTOR_C_SIGN,
+                          WHEEL_MOTOR_D_SIGN,
                           dt_ms,
                           &params);
 

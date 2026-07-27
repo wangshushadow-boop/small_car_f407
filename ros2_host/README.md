@@ -6,6 +6,8 @@
 ## 运行时边界
 
 - `small_car_base_node`：唯一自研底盘进程，独占 MCU 串口。
+- `ekf_filter_node`：融合 `/wheel/odom_raw` 与 `/imu/data_raw`，统一发布
+  `/odom` 和 `odom -> base_link`。
 - `nav2_container`：按官方 Composition 方式运行 Nav2 组件和
   `robot_state_publisher`。
 
@@ -55,6 +57,6 @@ docker compose up --build -d
 docker compose logs -f
 ```
 
-Dockerfile 已安装 Nav2，Compose 默认启动 `small_car_base_node` 与
-`nav2_container`。当前使用 odom-only 滚动代价地图；接入定位后再切换到
+Dockerfile 已安装 Nav2 和 `robot_localization`，Compose 默认启动底盘桥接、
+EKF 与 `nav2_container`。当前使用 odom-only 滚动代价地图；接入定位后再切换到
 `map -> odom` 和静态地图配置。

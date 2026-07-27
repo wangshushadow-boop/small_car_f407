@@ -11,7 +11,6 @@
 #include <stdint.h>
 
 #include "control_types.h"
-#include "odometry.h"
 #include "usart.h"
 
 /** 树莓派可按位选择的 MCU 周期遥测类型。 */
@@ -20,8 +19,6 @@ typedef enum {
   RASPI_TELEMETRY_ENCODER = 1U << 1,
   RASPI_TELEMETRY_IMU = 1U << 2,
   RASPI_TELEMETRY_DEVICE = 1U << 3,
-  RASPI_TELEMETRY_ODOMETRY = 1U << 4,
-  RASPI_TELEMETRY_ODOMETRY_DEBUG = 1U << 5,
 } RaspiTelemetryMask;
 
 /** 初始化接收状态机、控制超时和 UART 中断接收。 */
@@ -34,10 +31,10 @@ bool RaspiLink_GetControlCommand(ControlCommand *command);
 bool RaspiLink_TelemetryEnabled(RaspiTelemetryMask telemetry);
 /** 以下 Send* 接口按协议编码并通过 USART3 阻塞发送一帧。 */
 void RaspiLink_SendChassisStatus(const ControlCommand *command, int16_t ultra_mm);
-void RaspiLink_SendEncoderDelta(int16_t delta_a,
-                                int16_t delta_b,
-                                int16_t delta_c,
-                                int16_t delta_d);
+void RaspiLink_SendEncoderCounts(int32_t count_a,
+                                 int32_t count_b,
+                                 int32_t count_c,
+                                 int32_t count_d);
 void RaspiLink_SendImuRaw(int16_t ax,
                           int16_t ay,
                           int16_t az,
@@ -48,13 +45,6 @@ void RaspiLink_SendDeviceStatus(bool pad_ok,
                                 bool imu_ok,
                                 bool ultra_ok,
                                 uint8_t error);
-void RaspiLink_SendOdometry(const OdometrySample *odometry);
-void RaspiLink_SendOdometryDebug(uint32_t odom_time_ms,
-                                 int16_t left_speed_mm_s,
-                                 int16_t right_speed_mm_s,
-                                 int16_t turn_speed_mm_s,
-                                 int16_t left_delta_mm,
-                                 int16_t right_delta_mm);
 /** 转发 HAL UART 接收完成回调，并立即重新挂接下一个字节。 */
 void RaspiLink_OnUartRxCpltCallback(UART_HandleTypeDef *huart);
 /** 转发 HAL UART 错误回调，清错后恢复中断接收。 */

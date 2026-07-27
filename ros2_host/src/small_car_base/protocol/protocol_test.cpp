@@ -104,80 +104,28 @@ void TestDecodeChassis() {
   Expect(status->ultra_mm == 560, "ultra mismatch");
 }
 
-/** 验证三维里程计长负载的完整解码。 */
-void TestDecodeOdometry() {
+/** 验证四轮累计编码器计数的符号和字节序。 */
+void TestDecodeEncoderCounts() {
   const auto raw = small_car::EncodeFrame(
-      static_cast<std::uint8_t>(small_car::Msg::kOdometry),
+      static_cast<std::uint8_t>(small_car::Msg::kEncoderCounts),
       4,
       {
           0xE8, 0x03, 0x00, 0x00,  // t=1000
-          0x20, 0x03, 0x00, 0x00,  // x=800
-          0x9C, 0xFF, 0xFF, 0xFF,  // y=-100
-          0x19, 0x00, 0x00, 0x00,  // z=25
-          0x84, 0x03, 0x00, 0x00,  // distance=900
-          0x64, 0x00,              // speed=100
-          0xE8, 0x03, 0x00, 0x00,  // roll=1000 mdeg
-          0x30, 0xF8, 0xFF, 0xFF,  // pitch=-2000 mdeg
-          0x88, 0x13, 0x00, 0x00,  // yaw=5000 mdeg
-          0x40, 0x9C, 0x00, 0x00,  // yaw_rate=40000 mdeg/s
-          0x01,                    // calibrated=true
-          0x01,                    // wheel_yaw_fused=true
+          0xA0, 0x86, 0x01, 0x00,  // A=100000
+          0x38, 0xFF, 0xFF, 0xFF,  // B=-200
+          0x2C, 0x01, 0x00, 0x00,  // C=300
+          0x70, 0xFE, 0xFF, 0xFF,  // D=-400
       });
   small_car::FrameParser parser;
   const auto frames = parser.Feed(raw);
   const auto decoded = small_car::DecodePayload(frames[0]);
-  const auto* odom = std::get_if<small_car::Odometry>(&decoded.value());
-  Expect(odom != nullptr, "odometry type mismatch");
-  Expect(odom->mcu_time_ms == 1000, "odometry time mismatch");
-  Expect(odom->x_mm == 800, "odometry x mismatch");
-  Expect(odom->y_mm == -100, "odometry y mismatch");
-  Expect(odom->z_mm == 25, "odometry z mismatch");
-  Expect(odom->distance_mm == 900, "odometry distance mismatch");
-  Expect(odom->speed_mm_s == 100, "odometry speed mismatch");
-  Expect(odom->roll_mdeg == 1000, "odometry roll mismatch");
-  Expect(odom->pitch_mdeg == -2000, "odometry pitch mismatch");
-  Expect(odom->yaw_mdeg == 5000, "odometry yaw mismatch");
-  Expect(odom->yaw_rate_mdeg_s == 40000, "odometry yaw rate mismatch");
-  Expect(odom->calibrated, "odometry calibrated mismatch");
-  Expect(odom->wheel_yaw_fused, "odometry fusion flag mismatch");
-}
-
-/** 验证左右轮速和单周期位移调试消息。 */
-void TestDecodeOdometryDebug() {
-  const auto raw = small_car::EncodeFrame(
-      static_cast<std::uint8_t>(small_car::Msg::kOdometryDebug),
-      5,
-      {
-          0xE8, 0x03, 0x00, 0x00,  // t=1000
-          0x64, 0x00,              // left=100
-          0x78, 0x00,              // right=120
-          0x14, 0x00,              // turn=20
-          0x02, 0x00,              // dL=2
-          0x03, 0x00,              // dR=3
-      });
-  small_car::FrameParser parser;
-  const auto frames = parser.Feed(raw);
-  const auto decoded = small_car::DecodePayload(frames[0]);
-  const auto* odom_debug = std::get_if<small_car::OdometryDebug>(&decoded.value());
-  Expect(odom_debug != nullptr, "odometry debug type mismatch");
-  Expect(odom_debug->mcu_time_ms == 1000, "odometry debug time mismatch");
-  Expect(odom_debug->left_speed_mm_s == 100, "left speed mismatch");
-  Expect(odom_debug->right_speed_mm_s == 120, "right speed mismatch");
-  Expect(odom_debug->turn_speed_mm_s == 20, "turn speed mismatch");
-  Expect(odom_debug->left_delta_mm == 2, "left delta mismatch");
-  Expect(odom_debug->right_delta_mm == 3, "right delta mismatch");
-}
-
-/** 验证里程计清零使用参数消息中的专用操作码。 */
-void TestOdomResetFrame() {
-  const auto raw = small_car::MakeOdomResetFrame(6, 1000);
-  small_car::FrameParser parser;
-  const auto frames = parser.Feed(raw);
-  Expect(frames.size() == 1, "odom reset frame parse failed");
-  Expect(frames[0].msg == static_cast<std::uint8_t>(small_car::Msg::kParam),
-         "odom reset msg mismatch");
-  Expect(frames[0].payload.size() == 5, "odom reset payload size mismatch");
-  Expect(frames[0].payload[4] == 1, "odom reset param mismatch");
+  const auto* counts = std::get_if<small_car::EncoderCounts>(&decoded.value());
+  Expect(counts != nullptr, "encoder counts type mismatch");
+  Expect(counts->mcu_time_ms == 1000, "encoder counts time mismatch");
+  Expect(counts->count_a == 100000, "encoder A count mismatch");
+  Expect(counts->count_b == -200, "encoder B count mismatch");
+  Expect(counts->count_c == 300, "encoder C count mismatch");
+  Expect(counts->count_d == -400, "encoder D count mismatch");
 }
 
 /** 验证参数设置和查询帧的操作码、编号与 32 位数值。 */
@@ -244,9 +192,7 @@ int main() {
     TestNoiseAndSplit();
     TestBadCrcDropped();
     TestDecodeChassis();
-    TestDecodeOdometry();
-    TestDecodeOdometryDebug();
-    TestOdomResetFrame();
+    TestDecodeEncoderCounts();
     TestParamSetGetFrame();
     TestDecodeParamValue();
     TestDrivePhysicalVelocity();

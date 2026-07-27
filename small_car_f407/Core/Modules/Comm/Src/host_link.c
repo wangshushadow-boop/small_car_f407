@@ -19,7 +19,6 @@
 
 #include "debug_uart.h"
 #include "main.h"
-#include "odometry.h"
 #include "usart.h"
 
 #define HOST_LINK_LINE_SIZE 64U
@@ -228,18 +227,6 @@ static void ProcessCommand(const char *line)
     return;
   }
 
-  if (strcmp(command, "odom") == 0)
-  {
-    if (strcmp(action, "reset") == 0)
-    {
-      Odometry_Reset();
-      DebugUart_WriteString("[CMD] odom reset\r\n");
-      return;
-    }
-    SetLogSwitch("odom", action, DEBUG_LOG_ODOMETRY);
-    return;
-  }
-
   DebugUart_WriteString("[CMD] unknown command\r\n");
   PrintLogHelp();
 }
@@ -287,17 +274,16 @@ static bool SetLogSwitch(const char *name, const char *action, uint32_t category
 static void PrintLogHelp(void)
 {
   DebugUart_WriteString(
-      "[CMD] commands: ping, imu on/off, pad on/off, servo on/off, motor on/off, enc on/off, ultra on/off, odom on/off, odom reset, status, help\r\n");
+      "[CMD] commands: ping, imu on/off, pad on/off, servo on/off, motor on/off, enc on/off, ultra on/off, status, help\r\n");
 }
 
 static void PrintLogStatus(void)
 {
-  DebugUart_Printf("[CMD] imu=%s pad=%s servo=%s motor=%s enc=%s ultra=%s odom=%s\r\n",
+  DebugUart_Printf("[CMD] imu=%s pad=%s servo=%s motor=%s enc=%s ultra=%s\r\n",
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_IMU)),
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_GAMEPAD_DATA)),
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_SERVO)),
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_MOTOR)),
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_ENCODER)),
-                   BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_ULTRASONIC)),
-                   BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_ODOMETRY)));
+                   BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_ULTRASONIC)));
 }

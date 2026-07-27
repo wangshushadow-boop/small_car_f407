@@ -39,7 +39,7 @@ typedef enum {
 
 /** 底盘当前运行参数快照；字段名同时对应树莓派 YAML 键名。 */
 typedef struct {
-  /** 里程计每 tick 毫米比例的分子，分母固定在 odometry.h。 */
+  /** 编码器每 tick 毫米比例的分子，分母固定为 15600。 */
   int32_t odom_mm_per_tick_num;
   /** 以下手柄参数均使用 0..1000 归一化尺度。 */
   int16_t gamepad_forward_start;

@@ -1,6 +1,6 @@
 /**
  * @file system_status.c
- * @brief 汇总 IMU、编码器、超声、里程计和控制状态并按节拍上传树莓派。
+ * @brief 汇总 IMU、编码器、超声和控制状态并按节拍上传树莓派。
  *
  * 本模块只负责采样调度和遥测分发，不参与底盘控制决策。
  */
@@ -20,7 +20,6 @@
 #include "gamepad.h"
 #include "icm20948.h"
 #include "main.h"
-#include "odometry.h"
 #include "oled.h"
 #include "raspi_link.h"
 #include "ultrasonic.h"
@@ -28,8 +27,6 @@
 #define CHASSIS_REPORT_PERIOD_MS 50U
 #define ENCODER_REPORT_PERIOD_MS 20U
 #define IMU_REPORT_PERIOD_MS 20U
-#define ODOMETRY_REPORT_PERIOD_MS 20U
-#define ODOMETRY_DEBUG_REPORT_PERIOD_MS 50U
 #define DEVICE_REPORT_PERIOD_MS 1000U
 #define OLED_REPORT_PERIOD_MS 1000U
 #define IMU_REINIT_PERIOD_MS 1000U
@@ -41,8 +38,6 @@
 static uint32_t g_last_chassis_report_tick = 0U;
 static uint32_t g_last_encoder_report_tick = 0U;
 static uint32_t g_last_imu_report_tick = 0U;
-static uint32_t g_last_odometry_report_tick = 0U;
-static uint32_t g_last_odometry_debug_report_tick = 0U;
 static uint32_t g_last_device_report_tick = 0U;
 static uint32_t g_last_oled_report_tick = 0U;
 static uint32_t g_last_imu_reinit_tick = 0U;
@@ -52,7 +47,6 @@ static const char *SourceToText(ControlSource source);
 static void ReportChassisToHost(const ControlCommand *command);
 static void ReportEncoderToHost(void);
 static void ReportImuToHost(void);
-static void ReportOdometryToHost(void);
 static void ReportDeviceToHost(void);
 static void ReportToOled(const ControlCommand *command);
 
@@ -63,8 +57,6 @@ void SystemStatus_Init(void)
   g_last_chassis_report_tick = now;
   g_last_encoder_report_tick = now;
   g_last_imu_report_tick = now;
-  g_last_odometry_report_tick = now;
-  g_last_odometry_debug_report_tick = now;
   g_last_device_report_tick = now;
   g_last_oled_report_tick = now;
   g_last_imu_reinit_tick = now;
@@ -81,8 +73,8 @@ void SystemStatus_TaskStep(const ControlCommand *command)
   uint32_t now = HAL_GetTick();
 
   /*
-   * 树莓派可按遥测位图选择需要的二进制数据；编码器、IMU 和里程计函数
-   * 仍按固定周期执行，因为它们同时承担采样、融合和本地可选日志输出。
+   * 树莓派可按遥测位图选择需要的二进制数据；编码器和 IMU 保持固定采样
+   * 节拍，是否上传只影响串口流量，不影响电机闭环和设备健康检测。
    */
   if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_CHASSIS) &&
       ((now - g_last_chassis_report_tick) >= CHASSIS_REPORT_PERIOD_MS))
@@ -101,12 +93,6 @@ void SystemStatus_TaskStep(const ControlCommand *command)
   {
     g_last_imu_report_tick = now;
     ReportImuToHost();
-  }
-
-  if ((now - g_last_odometry_report_tick) >= ODOMETRY_REPORT_PERIOD_MS)
-  {
-    g_last_odometry_report_tick = now;
-    ReportOdometryToHost();
   }
 
   if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_DEVICE) &&
@@ -164,10 +150,10 @@ static void ReportEncoderToHost(void)
 
   if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_ENCODER))
   {
-    RaspiLink_SendEncoderDelta(encoder_a.delta,
-                               encoder_b.delta,
-                               encoder_c.delta,
-                               encoder_d.delta);
+    RaspiLink_SendEncoderCounts(encoder_a.count,
+                                encoder_b.count,
+                                encoder_c.count,
+                                encoder_d.count);
   }
 
   DebugUart_PrintfIf(
@@ -191,17 +177,6 @@ static void ReportImuToHost(void)
 
   if (g_imu_ok)
   {
-    /*
-     * 里程计以 IMU 的 20 ms 节拍更新，并在同一时刻读取四路编码器增量。
-     * 原始 IMU 遥测是否开启，不影响本地融合持续运行。
-     */
-    EncoderSample encoder_a = Encoder_GetSample(MOTOR_A);
-    EncoderSample encoder_b = Encoder_GetSample(MOTOR_B);
-    EncoderSample encoder_c = Encoder_GetSample(MOTOR_C);
-    EncoderSample encoder_d = Encoder_GetSample(MOTOR_D);
-
-    Odometry_Update(&imu, encoder_a, encoder_b, encoder_c, encoder_d, HAL_GetTick());
-
     if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_IMU))
     {
       RaspiLink_SendImuRaw(imu.accel_x,
@@ -236,55 +211,6 @@ static void ReportImuToHost(void)
 
     DebugUart_PrintfIf(DEBUG_LOG_IMU, "[IMU] read failed, status=%d\r\n", imu_status);
   }
-}
-
-static void ReportOdometryToHost(void)
-{
-  /* 主里程计和轮侧调试量分开开关，正常运行时可以关闭高频调试帧。 */
-  OdometrySample odometry = Odometry_GetSample();
-  OdometryDebug odometry_debug = Odometry_GetDebug();
-
-  if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_ODOMETRY))
-  {
-    RaspiLink_SendOdometry(&odometry);
-  }
-  const uint32_t now = HAL_GetTick();
-  if (RaspiLink_TelemetryEnabled(RASPI_TELEMETRY_ODOMETRY_DEBUG) &&
-      ((now - g_last_odometry_debug_report_tick) >=
-       ODOMETRY_DEBUG_REPORT_PERIOD_MS))
-  {
-    g_last_odometry_debug_report_tick = now;
-    RaspiLink_SendOdometryDebug(odometry.time_ms,
-                                odometry_debug.left_speed_mm_s,
-                                odometry_debug.right_speed_mm_s,
-                                odometry_debug.turn_speed_mm_s,
-                                odometry_debug.left_delta_mm,
-                                odometry_debug.right_delta_mm);
-  }
-
-  DebugUart_PrintfIf(DEBUG_LOG_ODOMETRY,
-                     "[ODOM] t=%lu x=%ld y=%ld z=%ld dist=%ld speed=%d "
-                     "rpy=%ld/%ld/%ld rate=%ld cal=%d fused=%d\r\n",
-                     odometry.time_ms,
-                     odometry.x_mm,
-                     odometry.y_mm,
-                     odometry.z_mm,
-                     odometry.distance_mm,
-                     odometry.speed_mm_s,
-                     odometry.roll_mdeg,
-                     odometry.pitch_mdeg,
-                     odometry.yaw_mdeg,
-                     odometry.yaw_rate_mdeg_s,
-                     odometry.calibrated ? 1 : 0,
-                     odometry.wheel_yaw_fused ? 1 : 0);
-
-  DebugUart_PrintfIf(DEBUG_LOG_ODOMETRY,
-                     "[ODOM_WHEEL] L=%d R=%d turn=%d dL=%d dR=%d\r\n",
-                     odometry_debug.left_speed_mm_s,
-                     odometry_debug.right_speed_mm_s,
-                     odometry_debug.turn_speed_mm_s,
-                     odometry_debug.left_delta_mm,
-                     odometry_debug.right_delta_mm);
 }
 
 static void ReportDeviceToHost(void)

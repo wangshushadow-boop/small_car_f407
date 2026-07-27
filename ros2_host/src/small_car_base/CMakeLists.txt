@@ -14,8 +14,6 @@ find_package(nav_msgs REQUIRED)
 find_package(rcl_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
-find_package(tf2_ros REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
@@ -42,12 +40,10 @@ target_link_libraries(small_car_base_node PRIVATE
   ${nav_msgs_TARGETS}
   ${rcl_interfaces_TARGETS}
   ${sensor_msgs_TARGETS}
-  ${std_srvs_TARGETS}
   ${trajectory_msgs_TARGETS}
   ament_index_cpp::ament_index_cpp
   rclcpp::rclcpp
   sensor_msgs::sensor_msgs_library
-  tf2_ros::tf2_ros
 )
 
 if(BUILD_TESTING)

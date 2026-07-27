@@ -88,6 +88,15 @@ def generate_launch_description():
         ],
     )
 
+    ekf_node = Node(
+        package="robot_localization",
+        executable="ekf_node",
+        name="ekf_filter_node",
+        output="screen",
+        parameters=[os.path.join(base_share, "config", "ekf.yaml")],
+        remappings=[("odometry/filtered", "odom")],
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             "params_file",
@@ -97,6 +106,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         base_node,
+        ekf_node,
         nav2_container,
         navigation,
         description_component,

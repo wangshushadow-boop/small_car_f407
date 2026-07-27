@@ -11,7 +11,10 @@
 | `chassis` | 底盘参数文件读取、校验和下发 | `mcu`、yaml-cpp |
 | `control` | 速度限幅、命令超时和近障停车 | C++ 标准库 |
 | `servo` | 上下两路云台角度与 PWM 映射 | C++ 标准库 |
-| `ros` | ROS 消息转换、Topic、Service、TF 和定时调度 | 以上全部 |
+| `ros` | 原始传感器 Topic、命令接口和定时调度 | 以上全部 |
+
+`robot_localization` 使用 `config/ekf.yaml`，负责最终 `/odom` 和
+`odom -> base_link`，不在自研模块中重复实现滤波器。
 
 依赖方向只能从上层指向下层。禁止：
 

@@ -63,11 +63,11 @@ source /workspace/rpi_host/install-ros/setup.bash
 
 ```bash
 ros2 topic list
+ros2 topic echo /wheel/odom_raw
+ros2 topic echo /imu/data_raw
 ros2 topic echo /odom
-ros2 topic echo /imu/data
 ros2 topic echo /ultrasonic/front
 ros2 run tf2_ros tf2_echo odom base_link
-ros2 service call /reset_odometry std_srvs/srv/Empty "{}"
 ```
 
 持续发送低速前进，结束后按 `Ctrl+C`：
@@ -89,9 +89,9 @@ ROS2 话题：
 | 名称 | 类型 | 方向 | 内容 |
 | --- | --- | --- | --- |
 | `/cmd_vel` | `geometry_msgs/msg/TwistStamped` | 订阅 | 唯一底盘速度入口，必须携带有效时间戳。 |
-| `/odom` | `nav_msgs/msg/Odometry` | 发布 | 三维位置、姿态、前向速度和航向角速度。 |
-| `/imu/data` | `sensor_msgs/msg/Imu` | 发布 | MCU 融合姿态以及原始加速度、角速度。 |
-| `/debug/imu/raw` | `sensor_msgs/msg/Imu` | 可选发布 | `debug_enabled=true` 时用于 IMU 标定。 |
+| `/wheel/odom_raw` | `nav_msgs/msg/Odometry` | 发布 | 编码器计算的未融合底盘速度。 |
+| `/imu/data_raw` | `sensor_msgs/msg/Imu` | 发布 | MCU 原始加速度和角速度，不含姿态。 |
+| `/odom` | `nav_msgs/msg/Odometry` | 发布 | `robot_localization` 的统一融合输出。 |
 | `/ultrasonic/front` | `sensor_msgs/msg/Range` | 发布 | 前方超声距离。 |
 | `/joint_states` | `sensor_msgs/msg/JointState` | 可选发布 | 四轮角速度和两路舵机位置，默认 20Hz。 |
 | `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | 发布 | 手柄、IMU、超声和 MCU 错误状态。 |
@@ -101,10 +101,9 @@ ROS2 服务与坐标系：
 
 | 名称 | 类型/关系 | 说明 |
 | --- | --- | --- |
-| `/reset_odometry` | `std_srvs/srv/Empty` | 清零 MCU 里程计。 |
 | `/drive_on_heading` | `nav2_msgs/action/DriveOnHeading` | 由 Nav2 Behavior Server 提供。 |
 | `/spin` | `nav2_msgs/action/Spin` | 由 Nav2 Behavior Server 提供。 |
-| 动态 TF | `odom -> base_link` | 小车三维位姿。 |
+| 动态 TF | `odom -> base_link` | 由 `robot_localization` 唯一发布。 |
 | URDF 固定关节 | `base_link -> imu_link` | IMU 安装关系，由 `robot_state_publisher` 发布。 |
 | URDF 固定关节 | `base_link -> ultrasonic_link` | 超声安装关系，由 `robot_state_publisher` 发布。 |
 
@@ -114,12 +113,13 @@ ROS2 相关参数：
 | --- | --- |
 | `rpi_host/src/small_car_base/config/chassis.yaml` | ROS 与 MCU 共用的底盘物理约束、里程计和闭环标定参数；启动时整组下发并回读校验。 |
 | `rpi_host/src/small_car_base/config/base.yaml` | 串口、命令时序、坐标系、传感器描述、协方差和云台映射参数。 |
+| `rpi_host/src/small_car_base/config/ekf.yaml` | 轮式里程计和 IMU 的 EKF 融合参数。 |
 | `rpi_host/src/small_car_nav2/config/nav2.yaml` | Nav2 Planner、Controller、Behavior 和速度链参数。 |
 | `rpi_host/src/small_car_description/urdf/robot_geometry.xacro` | 硬件安装坐标。 |
 
 `/cmd_vel` 使用 ROS2 标准单位和 `TwistStamped`。Nav2 完成正常速度平滑及
 碰撞监控，底盘节点执行最终硬限幅和失效保护，然后转换为 `mm/s`、`mrad/s`
-通过协议 v2 下发。
+通过协议 v3 下发。
 
 ## WSL 远程连接 ROS2
 

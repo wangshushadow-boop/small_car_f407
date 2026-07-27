@@ -1,6 +1,6 @@
 /**
  * @file sensor_monitor.cpp
- * @brief 提供 MCU 传感器、里程计和底盘状态的命令行监视工具。
+ * @brief 提供 MCU 传感器和底盘状态的命令行监视工具。
  *
  * 程序启动时可自动从 YAML 下发底盘参数，并按命令行选项选择要打印的遥测类型。
  */
@@ -32,7 +32,6 @@ struct Options {
   bool show_ultrasonic = false;
   bool show_chassis = false;
   bool show_device = false;
-  bool show_odometry = false;
 };
 
 /** 打印命令语法和常用示例。 */
@@ -40,7 +39,7 @@ void PrintUsage() {
   std::cout
       << "Usage:\n"
       << "  sensor_monitor [--port /dev/ttyACM0] [--config <path>] [--all]\n"
-      << "  sensor_monitor [--imu] [--enc] [--ultra] [--chassis] [--device] [--odom]\n"
+      << "  sensor_monitor [--imu] [--enc] [--ultra] [--chassis] [--device]\n"
       << "  sensor_monitor [--interval-ms 100] [--strict-config]\n\n"
       << "Examples:\n"
       << "  sensor_monitor --all\n"
@@ -79,15 +78,12 @@ bool ParseArgs(int argc, char** argv, Options* options) {
       options->show_chassis = true;
     } else if (arg == "--device") {
       options->show_device = true;
-    } else if (arg == "--odom") {
-      options->show_odometry = true;
     } else if (arg == "--all") {
       options->show_imu = true;
       options->show_encoder = true;
       options->show_ultrasonic = true;
       options->show_chassis = true;
       options->show_device = true;
-      options->show_odometry = true;
     } else {
       std::cerr << "unknown argument: " << arg << "\n";
       PrintUsage();
@@ -96,7 +92,7 @@ bool ParseArgs(int argc, char** argv, Options* options) {
   }
 
   if (!options->show_imu && !options->show_encoder && !options->show_ultrasonic &&
-      !options->show_chassis && !options->show_device && !options->show_odometry) {
+      !options->show_chassis && !options->show_device) {
     options->show_imu = true;
     options->show_encoder = true;
     options->show_ultrasonic = true;
@@ -135,12 +131,12 @@ void PrintImu(const small_car::ImuRaw& imu) {
             << " gz=" << imu.gz << "\n";
 }
 
-void PrintEncoder(const small_car::EncoderDelta& enc) {
+void PrintEncoder(const small_car::EncoderCounts& enc) {
   std::cout << "[ENC] t=" << enc.mcu_time_ms
-            << " A=" << enc.delta_a
-            << " B=" << enc.delta_b
-            << " C=" << enc.delta_c
-            << " D=" << enc.delta_d << "\n";
+            << " A=" << enc.count_a
+            << " B=" << enc.count_b
+            << " C=" << enc.count_c
+            << " D=" << enc.count_d << "\n";
 }
 
 void PrintUltrasonic(const small_car::ChassisStatus& chassis) {
@@ -168,29 +164,6 @@ void PrintDevice(const small_car::DeviceStatus& device) {
             << " imu=" << device.imu_ok
             << " ultra=" << device.ultra_ok
             << " error=" << static_cast<int>(device.error) << "\n";
-}
-
-void PrintOdometry(const small_car::Odometry& odometry) {
-  std::cout << "[ODOM] t=" << odometry.mcu_time_ms
-            << " xyz=" << odometry.x_mm << "/" << odometry.y_mm << "/"
-            << odometry.z_mm << " mm"
-            << " dist=" << odometry.distance_mm << " mm"
-            << " speed=" << odometry.speed_mm_s << " mm/s"
-            << " rpy=" << (odometry.roll_mdeg / 1000.0) << "/"
-            << (odometry.pitch_mdeg / 1000.0) << "/"
-            << (odometry.yaw_mdeg / 1000.0) << " deg"
-            << " yaw_rate=" << (odometry.yaw_rate_mdeg_s / 1000.0) << " deg/s"
-            << " calibrated=" << odometry.calibrated
-            << " wheel_fused=" << odometry.wheel_yaw_fused << "\n";
-}
-
-void PrintOdometryDebug(const small_car::OdometryDebug& odometry_debug) {
-  std::cout << "[ODOM_WHEEL] t=" << odometry_debug.mcu_time_ms
-            << " L=" << odometry_debug.left_speed_mm_s << " mm/s"
-            << " R=" << odometry_debug.right_speed_mm_s << " mm/s"
-            << " turn=" << odometry_debug.turn_speed_mm_s << " mm/s"
-            << " dL=" << odometry_debug.left_delta_mm << " mm"
-            << " dR=" << odometry_debug.right_delta_mm << " mm\n";
 }
 
 }  // namespace
@@ -252,10 +225,6 @@ int main(int argc, char** argv) {
   if (options.show_device) {
     telemetry_mask |= small_car::kTelemetryDevice;
   }
-  if (options.show_odometry) {
-    telemetry_mask |=
-        small_car::kTelemetryOdometry | small_car::kTelemetryOdometryDebug;
-  }
   if (!client.SendTelemetryConfig(telemetry_mask)) {
     std::cerr << "[MON] warning: telemetry config send failed\n";
   }
@@ -270,17 +239,11 @@ int main(int argc, char** argv) {
   std::uint32_t last_chassis_time = 0;
   std::uint32_t last_ultrasonic_time = 0;
   std::uint32_t last_device_time = 0;
-  std::uint32_t last_odometry_time = 0;
-  std::uint32_t last_odometry_debug_time = 0;
-  bool seen_odometry = false;
-  bool seen_odometry_debug = false;
   auto last_imu_print = std::chrono::steady_clock::now();
   auto last_encoder_print = last_imu_print;
   auto last_chassis_print = last_imu_print;
   auto last_ultrasonic_print = last_imu_print;
   auto last_device_print = last_imu_print;
-  auto last_odometry_print = last_imu_print;
-  auto last_odometry_debug_print = last_imu_print;
 
   while (true) {
     client.Poll();
@@ -297,7 +260,7 @@ int main(int argc, char** argv) {
     }
 
     if (options.show_encoder) {
-      if (const auto enc = client.GetEncoderDelta()) {
+      if (const auto enc = client.GetEncoderCounts()) {
         if (enc->mcu_time_ms != last_encoder_time &&
             CanPrint(now, &last_encoder_print, options.interval_ms)) {
           last_encoder_time = enc->mcu_time_ms;
@@ -327,26 +290,6 @@ int main(int argc, char** argv) {
             CanPrint(now, &last_device_print, options.interval_ms)) {
           last_device_time = device->mcu_time_ms;
           PrintDevice(*device);
-        }
-      }
-    }
-
-    if (options.show_odometry) {
-      if (const auto odometry = client.GetOdometry()) {
-        if ((!seen_odometry || odometry->mcu_time_ms != last_odometry_time) &&
-            CanPrint(now, &last_odometry_print, options.interval_ms)) {
-          seen_odometry = true;
-          last_odometry_time = odometry->mcu_time_ms;
-          PrintOdometry(*odometry);
-        }
-      }
-      if (const auto odometry_debug = client.GetOdometryDebug()) {
-        if ((!seen_odometry_debug ||
-             odometry_debug->mcu_time_ms != last_odometry_debug_time) &&
-            CanPrint(now, &last_odometry_debug_print, options.interval_ms)) {
-          seen_odometry_debug = true;
-          last_odometry_debug_time = odometry_debug->mcu_time_ms;
-          PrintOdometryDebug(*odometry_debug);
         }
       }
     }

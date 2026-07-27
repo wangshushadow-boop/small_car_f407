@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-kilted-navigation2 \
       ros-kilted-nav2-bringup \
       ros-kilted-robot-state-publisher \
+      ros-kilted-robot-localization \
       ros-kilted-sensor-msgs \
       ros-kilted-std-msgs \
       ros-kilted-std-srvs \

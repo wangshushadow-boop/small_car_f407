@@ -23,7 +23,6 @@
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
 #include <diagnostic_msgs/msg/key_value.hpp>
-#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
@@ -31,8 +30,6 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <sensor_msgs/msg/range.hpp>
-#include <std_srvs/srv/empty.hpp>
-#include <tf2_ros/transform_broadcaster.h>
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
 
 #include "small_car_base/chassis/chassis_config.hpp"
@@ -47,21 +44,15 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kDegreesToRadians = kPi / 180.0;
 constexpr double kGravity = 9.80665;
 
-/** 将 roll、pitch、yaw 欧拉角转换为 ROS 使用的单位四元数。 */
-geometry_msgs::msg::Quaternion QuaternionFromRpy(double roll, double pitch, double yaw) {
-  const double cr = std::cos(roll * 0.5);
-  const double sr = std::sin(roll * 0.5);
-  const double cp = std::cos(pitch * 0.5);
-  const double sp = std::sin(pitch * 0.5);
-  const double cy = std::cos(yaw * 0.5);
-  const double sy = std::sin(yaw * 0.5);
+constexpr double kEncoderMillimeterDenominator = 15600.0;
+constexpr std::uint32_t kMaximumEncoderIntervalMs = 500;
+constexpr std::int64_t kMaximumEncoderDelta = 10000;
 
-  geometry_msgs::msg::Quaternion result;
-  result.w = cr * cp * cy + sr * sp * sy;
-  result.x = sr * cp * cy - cr * sp * sy;
-  result.y = cr * sp * cy + sr * cp * sy;
-  result.z = cr * cp * sy - sr * sp * cy;
-  return result;
+/** 使用无符号减法计算累计编码器差值，可自然处理 int32 计数回绕。 */
+std::int32_t CounterDelta(std::int32_t current, std::int32_t previous) {
+  return static_cast<std::int32_t>(
+      static_cast<std::uint32_t>(current) -
+      static_cast<std::uint32_t>(previous));
 }
 
 /** 构造一项 diagnostic_msgs 键值，减少诊断发布代码的重复。 */
@@ -124,20 +115,15 @@ class SmallCarBaseNode : public rclcpp::Node {
     declare_parameter<std::string>("base_frame", "base_link");
     declare_parameter<std::string>("imu_frame", "imu_link");
     declare_parameter<std::string>("ultrasonic_frame", "ultrasonic_link");
-    declare_parameter<bool>("publish_tf", true);
-    declare_parameter<bool>("debug_enabled", false);
     declare_parameter<bool>("publish_joint_states", true);
     declare_parameter<double>("wheel_radius_m", 0.0325);
     declare_parameter<double>("ultrasonic_min_range_m", 0.02);
     declare_parameter<double>("ultrasonic_max_range_m", 4.0);
     declare_parameter<double>("ultrasonic_field_of_view_rad", 0.52);
-    declare_parameter<double>("odom_position_variance", 0.01);
-    declare_parameter<double>("odom_orientation_variance", 0.02);
     declare_parameter<double>("odom_linear_velocity_variance", 0.04);
     declare_parameter<double>("odom_angular_velocity_variance", 0.05);
     declare_parameter<double>("imu_acceleration_variance", 0.1);
     declare_parameter<double>("imu_angular_velocity_variance", 0.02);
-    declare_parameter<double>("imu_orientation_variance", 0.02);
     DeclareServoParameters("upper", 1500, 800, 2300);
     DeclareServoParameters("lower", 1250, 800, 1700);
   }
@@ -176,6 +162,14 @@ class SmallCarBaseNode : public rclcpp::Node {
         static_cast<double>(small_car::ChassisParameterValue(
             chassis_parameters_, "ultra_near_distance_mm")) /
         1000.0;
+    millimeters_per_tick_ =
+        static_cast<double>(small_car::ChassisParameterValue(
+            chassis_parameters_, "odom_mm_per_tick_num")) /
+        kEncoderMillimeterDenominator;
+    wheel_track_m_ =
+        static_cast<double>(small_car::ChassisParameterValue(
+            chassis_parameters_, "wheel_track_mm")) /
+        1000.0;
     cmd_vel_timeout_ =
         std::chrono::milliseconds(get_parameter("cmd_vel_timeout_ms").as_int());
     command_rate_hz_ = get_parameter("command_rate_hz").as_double();
@@ -184,15 +178,11 @@ class SmallCarBaseNode : public rclcpp::Node {
     base_frame_ = get_parameter("base_frame").as_string();
     imu_frame_ = get_parameter("imu_frame").as_string();
     ultrasonic_frame_ = get_parameter("ultrasonic_frame").as_string();
-    publish_tf_ = get_parameter("publish_tf").as_bool();
-    debug_enabled_ = get_parameter("debug_enabled").as_bool();
     publish_joint_states_ = get_parameter("publish_joint_states").as_bool();
     wheel_radius_m_ = get_parameter("wheel_radius_m").as_double();
     ultra_min_m_ = get_parameter("ultrasonic_min_range_m").as_double();
     ultra_max_m_ = get_parameter("ultrasonic_max_range_m").as_double();
     ultra_fov_rad_ = get_parameter("ultrasonic_field_of_view_rad").as_double();
-    odom_position_variance_ = get_parameter("odom_position_variance").as_double();
-    odom_orientation_variance_ = get_parameter("odom_orientation_variance").as_double();
     odom_linear_velocity_variance_ =
         get_parameter("odom_linear_velocity_variance").as_double();
     odom_angular_velocity_variance_ =
@@ -200,12 +190,12 @@ class SmallCarBaseNode : public rclcpp::Node {
     imu_acceleration_variance_ = get_parameter("imu_acceleration_variance").as_double();
     imu_angular_velocity_variance_ =
         get_parameter("imu_angular_velocity_variance").as_double();
-    imu_orientation_variance_ = get_parameter("imu_orientation_variance").as_double();
     upper_servo_mapping_ = ReadServoParameters("upper");
     lower_servo_mapping_ = ReadServoParameters("lower");
 
     if (max_linear_speed_mps_ <= 0.0 || max_angular_speed_rad_s_ <= 0.0 ||
-        command_rate_hz_ <= 0.0 || wheel_radius_m_ <= 0.0) {
+        command_rate_hz_ <= 0.0 || wheel_radius_m_ <= 0.0 ||
+        millimeters_per_tick_ <= 0.0 || wheel_track_m_ <= 0.0) {
       throw std::runtime_error("ROS2 bridge contains a non-positive scale parameter");
     }
   }
@@ -279,13 +269,10 @@ class SmallCarBaseNode : public rclcpp::Node {
    * 下行速度或心跳，两者分开避免传感器处理拖慢安全停车。
    */
   void CreateRosInterfaces() {
-    odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("odom", 10);
-    if (debug_enabled_) {
-      imu_raw_pub_ = create_publisher<sensor_msgs::msg::Imu>(
-          "debug/imu/raw", rclcpp::SensorDataQoS());
-    }
-    imu_pub_ = create_publisher<sensor_msgs::msg::Imu>(
-        "imu/data", rclcpp::SensorDataQoS());
+    wheel_odom_pub_ =
+        create_publisher<nav_msgs::msg::Odometry>("wheel/odom_raw", 10);
+    imu_raw_pub_ = create_publisher<sensor_msgs::msg::Imu>(
+        "imu/data_raw", rclcpp::SensorDataQoS());
     range_pub_ = create_publisher<sensor_msgs::msg::Range>(
         "ultrasonic/front", rclcpp::SensorDataQoS());
     if (publish_joint_states_) {
@@ -294,7 +281,6 @@ class SmallCarBaseNode : public rclcpp::Node {
     }
     diagnostics_pub_ =
         create_publisher<diagnostic_msgs::msg::DiagnosticArray>("diagnostics", 10);
-    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
     cmd_vel_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(
         "cmd_vel", 10,
@@ -303,11 +289,6 @@ class SmallCarBaseNode : public rclcpp::Node {
         "servo_controller/joint_trajectory", 10,
         std::bind(&SmallCarBaseNode::OnServoTrajectory, this,
                   std::placeholders::_1));
-    reset_odom_service_ = create_service<std_srvs::srv::Empty>(
-        "reset_odometry",
-        std::bind(&SmallCarBaseNode::OnResetOdometry, this,
-                  std::placeholders::_1,
-                  std::placeholders::_2));
     parameter_callback_handle_ = add_on_set_parameters_callback(
         std::bind(&SmallCarBaseNode::OnSetParameters, this,
                   std::placeholders::_1));
@@ -323,11 +304,8 @@ class SmallCarBaseNode : public rclcpp::Node {
   /** 根据启用的 ROS 发布项配置 MCU，关闭无消费者的周期遥测以节省串口带宽。 */
   void ConfigureTelemetry() {
     std::uint16_t mask =
-        small_car::kTelemetryChassis | small_car::kTelemetryImu |
-        small_car::kTelemetryDevice | small_car::kTelemetryOdometry;
-    if (publish_joint_states_) {
-      mask |= small_car::kTelemetryOdometryDebug;
-    }
+        small_car::kTelemetryChassis | small_car::kTelemetryEncoder |
+        small_car::kTelemetryImu | small_car::kTelemetryDevice;
     if (!client_.SendTelemetryConfig(mask)) {
       RCLCPP_WARN(get_logger(), "failed to configure MCU telemetry");
     }
@@ -450,14 +428,6 @@ class SmallCarBaseNode : public rclcpp::Node {
     }
   }
 
-  /** 将空服务调用转换为 MCU 里程计清零命令。 */
-  void OnResetOdometry(const std::shared_ptr<std_srvs::srv::Empty::Request>,
-                       std::shared_ptr<std_srvs::srv::Empty::Response>) {
-    if (!client_.SendOdomReset()) {
-      RCLCPP_ERROR(get_logger(), "failed to send odometry reset request");
-    }
-  }
-
   /** 同步处理一项易变参数；MCU 回读一致后才允许 ROS 参数值更新。 */
   rcl_interfaces::msg::SetParametersResult OnSetParameters(
       const std::vector<rclcpp::Parameter>& parameters) {
@@ -529,79 +499,98 @@ class SmallCarBaseNode : public rclcpp::Node {
   /** 高频串口轮询入口；每次轮询后尝试发布所有已经更新的消息类型。 */
   void PollController() {
     client_.Poll();
-    PublishOdometry();
+    PublishWheelOdometry();
     PublishImu();
     PublishRange();
-    PublishWheels();
     PublishDiagnostics();
   }
 
-  /** 发布新的 MCU 里程计，并可同步广播 odom -> base_link 动态 TF。 */
-  void PublishOdometry() {
-    const auto value = client_.GetOdometry();
-    if (!value.has_value() || value->mcu_time_ms == last_odom_time_ms_) {
+  /** 将累计编码器计数换算为未融合的轮式速度里程计。 */
+  void PublishWheelOdometry() {
+    const auto value = client_.GetEncoderCounts();
+    if (!value.has_value() || value->mcu_time_ms == last_encoder_time_ms_) {
       return;
     }
-    last_odom_time_ms_ = value->mcu_time_ms;
-    latest_odom_ = value;
-    const auto stamp = now();
+    last_encoder_time_ms_ = value->mcu_time_ms;
+    if (!previous_encoder_counts_.has_value()) {
+      previous_encoder_counts_ = value;
+      return;
+    }
+
+    const auto previous = *previous_encoder_counts_;
+    previous_encoder_counts_ = value;
+    const std::uint32_t elapsed_ms =
+        value->mcu_time_ms - previous.mcu_time_ms;
+    if (elapsed_ms == 0U || elapsed_ms > kMaximumEncoderIntervalMs) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                           "encoder timestamp reset or gap; rebasing counts");
+      return;
+    }
+
+    const std::int32_t delta_a =
+        CounterDelta(value->count_a, previous.count_a);
+    const std::int32_t delta_b =
+        CounterDelta(value->count_b, previous.count_b);
+    const std::int32_t delta_c =
+        CounterDelta(value->count_c, previous.count_c);
+    const std::int32_t delta_d =
+        CounterDelta(value->count_d, previous.count_d);
+    for (const auto delta : {delta_a, delta_b, delta_c, delta_d}) {
+      if (std::abs(static_cast<std::int64_t>(delta)) >
+          kMaximumEncoderDelta) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                             "encoder count jump rejected");
+        return;
+      }
+    }
+
+    const double left_ticks =
+        (static_cast<double>(delta_a) + delta_b) * 0.5;
+    const double right_ticks =
+        (-static_cast<double>(delta_c) - delta_d) * 0.5;
+    const double left_distance_m =
+        left_ticks * millimeters_per_tick_ / 1000.0;
+    const double right_distance_m =
+        right_ticks * millimeters_per_tick_ / 1000.0;
+    const double elapsed_s = elapsed_ms / 1000.0;
+    left_wheel_speed_rad_s_ =
+        left_distance_m / elapsed_s / wheel_radius_m_;
+    right_wheel_speed_rad_s_ =
+        right_distance_m / elapsed_s / wheel_radius_m_;
+    left_wheel_position_rad_ += left_distance_m / wheel_radius_m_;
+    right_wheel_position_rad_ += right_distance_m / wheel_radius_m_;
 
     nav_msgs::msg::Odometry message;
-    message.header.stamp = stamp;
+    message.header.stamp = now();
     message.header.frame_id = odom_frame_;
     message.child_frame_id = base_frame_;
-    message.pose.pose.position.x = value->x_mm / 1000.0;
-    message.pose.pose.position.y = value->y_mm / 1000.0;
-    message.pose.pose.position.z = value->z_mm / 1000.0;
-    message.pose.pose.orientation = OdomQuaternion(*value);
-    message.twist.twist.linear.x = value->speed_mm_s / 1000.0;
+    message.pose.pose.orientation.w = 1.0;
+    for (const std::size_t index : {0U, 7U, 14U, 21U, 28U, 35U}) {
+      message.pose.covariance[index] = 1.0e6;
+    }
+    message.twist.twist.linear.x =
+        (left_distance_m + right_distance_m) * 0.5 / elapsed_s;
+    message.twist.twist.linear.y = 0.0;
     message.twist.twist.angular.z =
-        value->yaw_rate_mdeg_s / 1000.0 * kDegreesToRadians;
-    SetOdometryCovariance(&message);
-    odom_pub_->publish(message);
+        (right_distance_m - left_distance_m) / wheel_track_m_ / elapsed_s;
+    message.twist.covariance[0] = odom_linear_velocity_variance_;
+    message.twist.covariance[7] = odom_linear_velocity_variance_;
+    message.twist.covariance[14] = 1.0e3;
+    message.twist.covariance[21] = 1.0e3;
+    message.twist.covariance[28] = 1.0e3;
+    message.twist.covariance[35] = odom_angular_velocity_variance_;
+    wheel_odom_pub_->publish(message);
 
-    if (publish_tf_) {
-      geometry_msgs::msg::TransformStamped transform;
-      transform.header = message.header;
-      transform.child_frame_id = base_frame_;
-      transform.transform.translation.x = message.pose.pose.position.x;
-      transform.transform.translation.y = message.pose.pose.position.y;
-      transform.transform.translation.z = message.pose.pose.position.z;
-      transform.transform.rotation = message.pose.pose.orientation;
-      tf_broadcaster_->sendTransform(transform);
+    if (publish_joint_states_) {
+      PublishJointState(message.header.stamp);
     }
-  }
-
-  /** 把 MCU 的毫度姿态转换为 ROS 四元数。 */
-  static geometry_msgs::msg::Quaternion OdomQuaternion(
-      const small_car::Odometry& value) {
-    return QuaternionFromRpy(value.roll_mdeg / 1000.0 * kDegreesToRadians,
-                             value.pitch_mdeg / 1000.0 * kDegreesToRadians,
-                             value.yaw_mdeg / 1000.0 * kDegreesToRadians);
-  }
-
-  /** 填充 ROS 6x6 位姿/速度协方差；不观测的自由度使用较大方差。 */
-  void SetOdometryCovariance(nav_msgs::msg::Odometry* message) const {
-    // ROS 协方差是 6x6 行主序矩阵，对角线依次为 x/y/z/roll/pitch/yaw。
-    for (const std::size_t index : {0U, 7U, 14U}) {
-      message->pose.covariance[index] = odom_position_variance_;
-    }
-    for (const std::size_t index : {21U, 28U, 35U}) {
-      message->pose.covariance[index] = odom_orientation_variance_;
-    }
-    message->twist.covariance[0] = odom_linear_velocity_variance_;
-    message->twist.covariance[7] = 1.0e3;
-    message->twist.covariance[14] = 1.0e3;
-    message->twist.covariance[21] = 1.0e3;
-    message->twist.covariance[28] = 1.0e3;
-    message->twist.covariance[35] = odom_angular_velocity_variance_;
   }
 
   /**
    * 发布新的 IMU 数据。
    *
-   * 原始加速度和角速度按当前 ICM20948 量程换算；/imu/data 的姿态取自 MCU
-   * 融合里程计，原始流只在 debug.enabled 时发布到 /debug/imu/raw。
+   * 原始加速度和角速度按当前 ICM20948 量程换算。MCU 不提供姿态，
+   * orientation_covariance[0] 设为 -1 供消费者明确忽略 orientation。
    */
   void PublishImu() {
     const auto value = client_.GetImuRaw();
@@ -623,18 +612,7 @@ class SmallCarBaseNode : public rclcpp::Node {
       raw.linear_acceleration_covariance[index] = imu_acceleration_variance_;
       raw.angular_velocity_covariance[index] = imu_angular_velocity_variance_;
     }
-    if (debug_enabled_) {
-      imu_raw_pub_->publish(raw);
-    }
-
-    if (latest_odom_.has_value()) {
-      auto fused = raw;
-      fused.orientation = OdomQuaternion(latest_odom_.value());
-      fused.orientation_covariance[0] = imu_orientation_variance_;
-      fused.orientation_covariance[4] = imu_orientation_variance_;
-      fused.orientation_covariance[8] = imu_orientation_variance_;
-      imu_pub_->publish(fused);
-    }
+    imu_raw_pub_->publish(raw);
   }
 
   /** 发布有效超声测距，并直接更新内部安全模块。 */
@@ -660,30 +638,6 @@ class SmallCarBaseNode : public rclcpp::Node {
     range_pub_->publish(message);
   }
 
-  /** 对左右轮角速度做时间积分，形成 RViz 可观察的连续轮子转角。 */
-  void PublishWheels() {
-    if (!publish_joint_states_) {
-      return;
-    }
-    const auto value = client_.GetOdometryDebug();
-    if (!value.has_value() || value->mcu_time_ms == last_odom_debug_time_ms_) {
-      return;
-    }
-    if (last_odom_debug_time_ms_ != UINT32_MAX) {
-      const std::uint32_t elapsed_ms = value->mcu_time_ms - last_odom_debug_time_ms_;
-      if (elapsed_ms < 1000U) {
-        const double elapsed_s = elapsed_ms / 1000.0;
-        left_wheel_position_rad_ +=
-            value->left_speed_mm_s / 1000.0 / wheel_radius_m_ * elapsed_s;
-        right_wheel_position_rad_ +=
-            value->right_speed_mm_s / 1000.0 / wheel_radius_m_ * elapsed_s;
-      }
-    }
-    last_odom_debug_time_ms_ = value->mcu_time_ms;
-    latest_odom_debug_ = value;
-    PublishJointState(now());
-  }
-
   /** 合并轮子积分位置、轮速和当前舵机角度，发布完整 JointState。 */
   void PublishJointState(const rclcpp::Time& stamp) {
     sensor_msgs::msg::JointState message;
@@ -696,16 +650,10 @@ class SmallCarBaseNode : public rclcpp::Node {
                         right_wheel_position_rad_, right_wheel_position_rad_,
                         gimbal_command.upper_rad, gimbal_command.lower_rad};
     message.velocity.assign(message.name.size(), 0.0);
-    if (latest_odom_debug_.has_value()) {
-      const double left =
-          latest_odom_debug_->left_speed_mm_s / 1000.0 / wheel_radius_m_;
-      const double right =
-          latest_odom_debug_->right_speed_mm_s / 1000.0 / wheel_radius_m_;
-      message.velocity[0] = left;
-      message.velocity[1] = left;
-      message.velocity[2] = right;
-      message.velocity[3] = right;
-    }
+    message.velocity[0] = left_wheel_speed_rad_s_;
+    message.velocity[1] = left_wheel_speed_rad_s_;
+    message.velocity[2] = right_wheel_speed_rad_s_;
+    message.velocity[3] = right_wheel_speed_rad_s_;
     joint_pub_->publish(message);
   }
 
@@ -780,25 +728,24 @@ class SmallCarBaseNode : public rclcpp::Node {
   double max_angular_speed_rad_s_ = 2.0;
   double command_rate_hz_ = 20.0;
   double front_stop_distance_m_ = 0.2;
+  double millimeters_per_tick_ = 0.0;
+  double wheel_track_m_ = 0.115;
   double wheel_radius_m_ = 0.0325;
   double ultra_min_m_ = 0.02;
   double ultra_max_m_ = 4.0;
   double ultra_fov_rad_ = 0.52;
 
   // 发布给定位和融合算法的初始方差；后续应使用实测数据标定。
-  double odom_position_variance_ = 0.01;
-  double odom_orientation_variance_ = 0.02;
   double odom_linear_velocity_variance_ = 0.04;
   double odom_angular_velocity_variance_ = 0.05;
   double imu_acceleration_variance_ = 0.1;
   double imu_angular_velocity_variance_ = 0.02;
-  double imu_orientation_variance_ = 0.02;
 
   // RViz 轮子动画所需的积分位置，以及可选发布项开关。
   double left_wheel_position_rad_ = 0.0;
   double right_wheel_position_rad_ = 0.0;
-  bool publish_tf_ = true;
-  bool debug_enabled_ = false;
+  double left_wheel_speed_rad_s_ = 0.0;
+  double right_wheel_speed_rad_s_ = 0.0;
   bool publish_joint_states_ = true;
 
   // 下行命令超时、空闲心跳和 USB 恢复节流状态。
@@ -819,27 +766,22 @@ class SmallCarBaseNode : public rclcpp::Node {
   std::unique_ptr<small_car::CommandSafety> command_safety_;
 
   // 各 MCU 消息最近时间戳用于去重；UINT*_MAX 表示尚未接收过。
-  std::uint32_t last_odom_time_ms_ = UINT32_MAX;
+  std::uint32_t last_encoder_time_ms_ = UINT32_MAX;
   std::uint32_t last_imu_time_ms_ = UINT32_MAX;
   std::uint32_t last_chassis_time_ms_ = UINT32_MAX;
-  std::uint32_t last_odom_debug_time_ms_ = UINT32_MAX;
   std::uint32_t last_device_time_ms_ = UINT32_MAX;
-  std::optional<small_car::Odometry> latest_odom_;
-  std::optional<small_car::OdometryDebug> latest_odom_debug_;
+  std::optional<small_car::EncoderCounts> previous_encoder_counts_;
 
   // ROS 通信对象与定时器，生命周期均由节点统一管理。
-  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr wheel_odom_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_raw_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr range_pub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
   rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_sub_;
   rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr servo_sub_;
-  rclcpp::Service<std_srvs::srv::Empty>::SharedPtr reset_odom_service_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
       parameter_callback_handle_;
-  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   rclcpp::TimerBase::SharedPtr poll_timer_;
   rclcpp::TimerBase::SharedPtr command_timer_;
 };

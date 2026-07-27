@@ -2,7 +2,7 @@
  * @file main.cpp
  * @brief 提供小车串口协议的命令行调试客户端。
  *
- * 工具用于手动发送停止、速度、舵机和里程计命令，并查看 MCU 上行状态。
+ * 工具用于手动发送停止、速度和舵机命令，并查看 MCU 上行状态。
  */
 #include <chrono>
 #include <cstdint>
@@ -25,8 +25,7 @@ void PrintUsage() {
       << "  small_car_host_cli --port /dev/ttyACM0 heartbeat\n"
       << "  small_car_host_cli --port /dev/ttyACM0 stop\n"
       << "  small_car_host_cli --port /dev/ttyACM0 drive <linear_mm_s> <angular_mrad_s>\n"
-      << "  small_car_host_cli --port /dev/ttyACM0 servo <upper_us> <lower_us>\n"
-      << "  small_car_host_cli --port /dev/ttyACM0 odom-reset\n";
+      << "  small_car_host_cli --port /dev/ttyACM0 servo <upper_us> <lower_us>\n";
 }
 
 /** 返回指定命令行选项后面的值；选项不存在或缺少值时返回空字符串。 */
@@ -44,7 +43,7 @@ int FirstCommandIndex(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg == "monitor" || arg == "heartbeat" || arg == "stop" || arg == "drive" ||
-        arg == "servo" || arg == "odom-reset") {
+        arg == "servo") {
       return i;
     }
   }
@@ -178,10 +177,6 @@ int main(int argc, char** argv) {
                ? 0
                : 3;
   }
-  if (command == "odom-reset") {
-    return client.SendOdomReset() ? 0 : 3;
-  }
-
   int heartbeat_ms = 0;
   const std::string heartbeat_arg = ArgValue(argc, argv, "--heartbeat-ms");
   if (!heartbeat_arg.empty()) {

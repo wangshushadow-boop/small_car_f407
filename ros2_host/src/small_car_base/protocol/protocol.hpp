@@ -19,7 +19,7 @@
 namespace small_car {
 
 /** 当前协议版本。修改帧结构时必须同步升级 MCU 端版本。 */
-constexpr std::uint8_t kProtocolVersion = 0x02;
+constexpr std::uint8_t kProtocolVersion = 0x03;
 /** 两字节同步头，用于在噪声或丢字节后重新定位帧边界。 */
 constexpr std::uint8_t kSync0 = 0xAA;
 constexpr std::uint8_t kSync1 = 0x55;
@@ -34,12 +34,10 @@ enum class Msg : std::uint8_t {
   kParam = 0x04,
   kTelemetryConfig = 0x05,
   kChassisStatus = 0x81,
-  kEncoderDelta = 0x82,
+  kEncoderCounts = 0x82,
   kImuRaw = 0x83,
   kDeviceStatus = 0x84,
   kAck = 0x85,
-  kOdometry = 0x86,
-  kOdometryDebug = 0x87,
   kParamValue = 0x88,
 };
 
@@ -49,8 +47,6 @@ enum Telemetry : std::uint16_t {
   kTelemetryEncoder = 1U << 1,
   kTelemetryImu = 1U << 2,
   kTelemetryDevice = 1U << 3,
-  kTelemetryOdometry = 1U << 4,
-  kTelemetryOdometryDebug = 1U << 5,
 };
 
 /** 校验通过后的原始协议帧。 */
@@ -65,8 +61,8 @@ struct Frame {
 
 /** 所有当前支持解码的 MCU 上行消息。 */
 using DecodedMessage =
-    std::variant<ChassisStatus, EncoderDelta, ImuRaw, DeviceStatus, Ack, Odometry,
-                 OdometryDebug, ParamValue>;
+    std::variant<ChassisStatus, EncoderCounts, ImuRaw, DeviceStatus, Ack,
+                 ParamValue>;
 
 /** 计算协议使用的 CRC16-CCITT-FALSE。 */
 std::uint16_t Crc16CcittFalse(const std::uint8_t* data, std::size_t size);
@@ -93,8 +89,6 @@ std::vector<std::uint8_t> MakeServoFrame(std::uint8_t seq,
                                          std::uint16_t upper_us,
                                          std::uint16_t lower_us,
                                          std::uint32_t host_time_ms = NowMs());
-std::vector<std::uint8_t> MakeOdomResetFrame(std::uint8_t seq,
-                                             std::uint32_t host_time_ms = NowMs());
 std::vector<std::uint8_t> MakeParamSetFrame(std::uint8_t seq,
                                             std::uint8_t param_id,
                                             std::int32_t value,
@@ -135,7 +129,6 @@ class PacketCodec {
                                   std::int16_t angular_mrad_s);
   std::vector<std::uint8_t> Servo(std::uint16_t upper_us,
                                   std::uint16_t lower_us);
-  std::vector<std::uint8_t> OdomReset();
   std::vector<std::uint8_t> ParamSet(std::uint8_t param_id, std::int32_t value);
   std::vector<std::uint8_t> ParamGet(std::uint8_t param_id);
   std::vector<std::uint8_t> TelemetryConfig(std::uint16_t mask);

@@ -19,13 +19,12 @@
 #include "debug_uart.h"
 #include "chassis_params.h"
 #include "main.h"
-#include "odometry.h"
 #include "servo.h"
 #include "usart.h"
 
 #define RASPI_FRAME_SYNC_0 0xAAU
 #define RASPI_FRAME_SYNC_1 0x55U
-#define RASPI_FRAME_VERSION 0x02U
+#define RASPI_FRAME_VERSION 0x03U
 #define RASPI_PAYLOAD_MAX_SIZE 64U
 #define RASPI_RX_RING_SIZE 256U
 #define RASPI_RX_BUDGET 96U
@@ -38,18 +37,14 @@
 #define RASPI_MSG_PARAM 0x04U
 #define RASPI_MSG_TELEMETRY_CONFIG 0x05U
 #define RASPI_MSG_CHASSIS_STATUS 0x81U
-#define RASPI_MSG_ENCODER_DELTA 0x82U
+#define RASPI_MSG_ENCODER_COUNTS 0x82U
 #define RASPI_MSG_IMU_RAW 0x83U
 #define RASPI_MSG_DEVICE_STATUS 0x84U
 #define RASPI_MSG_ACK 0x85U
-#define RASPI_MSG_ODOMETRY 0x86U
-#define RASPI_MSG_ODOMETRY_DEBUG 0x87U
 #define RASPI_MSG_PARAM_VALUE 0x88U
 
-#define RASPI_PARAM_LEGACY_ODOMETRY_RESET 1U
 #define RASPI_PARAM_OP_SET 1U
 #define RASPI_PARAM_OP_GET 2U
-#define RASPI_PARAM_OP_ODOMETRY_RESET 3U
 
 #define RASPI_MODE_STOP 0U
 #define RASPI_MODE_VELOCITY 1U
@@ -90,8 +85,8 @@ static ControlCommand g_host_command = {0};
 static bool g_host_command_valid = false;
 static uint32_t g_last_control_tick = 0U;
 static uint16_t g_telemetry_mask =
-    RASPI_TELEMETRY_CHASSIS | RASPI_TELEMETRY_IMU |
-    RASPI_TELEMETRY_DEVICE | RASPI_TELEMETRY_ODOMETRY;
+    RASPI_TELEMETRY_CHASSIS | RASPI_TELEMETRY_ENCODER |
+    RASPI_TELEMETRY_IMU | RASPI_TELEMETRY_DEVICE;
 
 static bool PopRxByte(uint8_t *data);
 static void ProcessByte(uint8_t data);
@@ -178,18 +173,18 @@ void RaspiLink_SendChassisStatus(const ControlCommand *command, int16_t ultra_mm
   SendFrame(RASPI_MSG_CHASSIS_STATUS, payload, sizeof(payload));
 }
 
-void RaspiLink_SendEncoderDelta(int16_t delta_a,
-                                int16_t delta_b,
-                                int16_t delta_c,
-                                int16_t delta_d)
+void RaspiLink_SendEncoderCounts(int32_t count_a,
+                                 int32_t count_b,
+                                 int32_t count_c,
+                                 int32_t count_d)
 {
-  uint8_t payload[12] = {0};
+  uint8_t payload[20] = {0};
   WriteU32Le(&payload[0], HAL_GetTick());
-  WriteI16Le(&payload[4], delta_a);
-  WriteI16Le(&payload[6], delta_b);
-  WriteI16Le(&payload[8], delta_c);
-  WriteI16Le(&payload[10], delta_d);
-  SendFrame(RASPI_MSG_ENCODER_DELTA, payload, sizeof(payload));
+  WriteI32Le(&payload[4], count_a);
+  WriteI32Le(&payload[8], count_b);
+  WriteI32Le(&payload[12], count_c);
+  WriteI32Le(&payload[16], count_d);
+  SendFrame(RASPI_MSG_ENCODER_COUNTS, payload, sizeof(payload));
 }
 
 void RaspiLink_SendImuRaw(int16_t ax,
@@ -219,46 +214,6 @@ void RaspiLink_SendDeviceStatus(bool pad_ok, bool imu_ok, bool ultra_ok, uint8_t
   payload[6] = ultra_ok ? 1U : 0U;
   payload[7] = error;
   SendFrame(RASPI_MSG_DEVICE_STATUS, payload, sizeof(payload));
-}
-
-void RaspiLink_SendOdometry(const OdometrySample *odometry)
-{
-  if (odometry == NULL)
-  {
-    return;
-  }
-
-  uint8_t payload[40] = {0};
-  WriteU32Le(&payload[0], odometry->time_ms);
-  WriteI32Le(&payload[4], odometry->x_mm);
-  WriteI32Le(&payload[8], odometry->y_mm);
-  WriteI32Le(&payload[12], odometry->z_mm);
-  WriteI32Le(&payload[16], odometry->distance_mm);
-  WriteI16Le(&payload[20], odometry->speed_mm_s);
-  WriteI32Le(&payload[22], odometry->roll_mdeg);
-  WriteI32Le(&payload[26], odometry->pitch_mdeg);
-  WriteI32Le(&payload[30], odometry->yaw_mdeg);
-  WriteI32Le(&payload[34], odometry->yaw_rate_mdeg_s);
-  payload[38] = odometry->calibrated ? 1U : 0U;
-  payload[39] = odometry->wheel_yaw_fused ? 1U : 0U;
-  SendFrame(RASPI_MSG_ODOMETRY, payload, sizeof(payload));
-}
-
-void RaspiLink_SendOdometryDebug(uint32_t odom_time_ms,
-                                 int16_t left_speed_mm_s,
-                                 int16_t right_speed_mm_s,
-                                 int16_t turn_speed_mm_s,
-                                 int16_t left_delta_mm,
-                                 int16_t right_delta_mm)
-{
-  uint8_t payload[14] = {0};
-  WriteU32Le(&payload[0], odom_time_ms);
-  WriteI16Le(&payload[4], left_speed_mm_s);
-  WriteI16Le(&payload[6], right_speed_mm_s);
-  WriteI16Le(&payload[8], turn_speed_mm_s);
-  WriteI16Le(&payload[10], left_delta_mm);
-  WriteI16Le(&payload[12], right_delta_mm);
-  SendFrame(RASPI_MSG_ODOMETRY_DEBUG, payload, sizeof(payload));
 }
 
 void RaspiLink_OnUartRxCpltCallback(UART_HandleTypeDef *huart)
@@ -475,7 +430,7 @@ static void HandleControlCommand(uint8_t seq, const uint8_t *payload, uint8_t le
   else if (mode == RASPI_MODE_VELOCITY)
   {
     g_host_command.enabled = true;
-    /* 协议 v2 直接传输 ROS 物理速度：mm/s 和 mrad/s。 */
+    /* 协议 v3 直接传输 ROS 物理速度：mm/s 和 mrad/s。 */
     g_host_command.forward = ReadI16Le(&payload[6]);
     g_host_command.turn = ReadI16Le(&payload[8]);
   }
@@ -507,19 +462,6 @@ static void HandleParamCommand(uint8_t seq, const uint8_t *payload, uint8_t leng
   if (payload == NULL)
   {
     SendAck(RASPI_MSG_PARAM, seq, RASPI_ACK_LEN_ERROR);
-    return;
-  }
-
-  /*
-   * payload[0..3] 是树莓派发送时间，当前只保留给后续时间同步使用。
-   * payload[4] 是参数子命令，1 表示清零里程计并重新校准陀螺仪零偏。
-   */
-  if ((length == 5U) &&
-      ((payload[4] == RASPI_PARAM_LEGACY_ODOMETRY_RESET) ||
-       (payload[4] == RASPI_PARAM_OP_ODOMETRY_RESET)))
-  {
-    Odometry_Reset();
-    SendAck(RASPI_MSG_PARAM, seq, RASPI_ACK_OK);
     return;
   }
 

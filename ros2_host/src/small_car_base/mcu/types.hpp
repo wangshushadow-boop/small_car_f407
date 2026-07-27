@@ -61,13 +61,13 @@ struct ChassisStatus {
   std::int16_t ultra_mm = -1;
 };
 
-/** 一个采样周期内四个电机编码器的增量计数。 */
-struct EncoderDelta {
+/** 四个电机编码器自 MCU 启动或清零后的累计计数。 */
+struct EncoderCounts {
   std::uint32_t mcu_time_ms = 0;
-  std::int16_t delta_a = 0;
-  std::int16_t delta_b = 0;
-  std::int16_t delta_c = 0;
-  std::int16_t delta_d = 0;
+  std::int32_t count_a = 0;
+  std::int32_t count_b = 0;
+  std::int32_t count_c = 0;
+  std::int32_t count_d = 0;
 };
 
 /** ICM20948 原始六轴采样值，量程换算由使用者根据 MCU 配置完成。 */
@@ -88,35 +88,6 @@ struct DeviceStatus {
   bool imu_ok = false;
   bool ultra_ok = false;
   std::uint8_t error = 0;
-};
-
-/** MCU 融合得到的三维里程计状态。 */
-struct Odometry {
-  std::uint32_t mcu_time_ms = 0;
-  /** 位置单位为 mm，角度单位为 mdeg，便于 MCU 端使用整数传输。 */
-  std::int32_t x_mm = 0;
-  std::int32_t y_mm = 0;
-  std::int32_t z_mm = 0;
-  std::int32_t distance_mm = 0;
-  std::int16_t speed_mm_s = 0;
-  std::int32_t roll_mdeg = 0;
-  std::int32_t pitch_mdeg = 0;
-  std::int32_t yaw_mdeg = 0;
-  std::int32_t yaw_rate_mdeg_s = 0;
-  /** IMU 零偏标定是否已经完成。 */
-  bool calibrated = false;
-  /** 航向角是否已经融合轮速差分信息。 */
-  bool wheel_yaw_fused = false;
-};
-
-/** 里程计调试数据，用于检查左右轮速、转向分量和单周期位移。 */
-struct OdometryDebug {
-  std::uint32_t mcu_time_ms = 0;
-  std::int16_t left_speed_mm_s = 0;
-  std::int16_t right_speed_mm_s = 0;
-  std::int16_t turn_speed_mm_s = 0;
-  std::int16_t left_delta_mm = 0;
-  std::int16_t right_delta_mm = 0;
 };
 
 /** MCU 返回的一个可调底盘参数及其当前值。 */

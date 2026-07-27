@@ -13,12 +13,14 @@ def generate_launch_description():
     description_share = get_package_share_directory("small_car_description")
     default_base_config = os.path.join(share, "config", "base.yaml")
     default_chassis_config = os.path.join(share, "config", "chassis.yaml")
+    default_ekf_config = os.path.join(share, "config", "ekf.yaml")
 
     return LaunchDescription([
         DeclareLaunchArgument("base_config", default_value=default_base_config),
         DeclareLaunchArgument(
             "chassis_config", default_value=default_chassis_config
         ),
+        DeclareLaunchArgument("ekf_config", default_value=default_ekf_config),
         Node(
             package="small_car_base",
             executable="small_car_base_node",
@@ -28,6 +30,14 @@ def generate_launch_description():
                 LaunchConfiguration("base_config"),
                 {"chassis_config": LaunchConfiguration("chassis_config")},
             ],
+        ),
+        Node(
+            package="robot_localization",
+            executable="ekf_node",
+            name="ekf_filter_node",
+            output="screen",
+            parameters=[LaunchConfiguration("ekf_config")],
+            remappings=[("odometry/filtered", "odom")],
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(

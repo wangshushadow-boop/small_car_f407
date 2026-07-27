@@ -36,10 +36,6 @@ bool CarClient::SendServo(std::uint16_t upper_us, std::uint16_t lower_us) {
   return SendBytes(codec_.Servo(upper_us, lower_us));
 }
 
-bool CarClient::SendOdomReset() {
-  return SendBytes(codec_.OdomReset());
-}
-
 bool CarClient::SendParamSet(std::uint8_t param_id, std::int32_t value) {
   return SendBytes(codec_.ParamSet(param_id, value));
 }
@@ -65,8 +61,8 @@ std::optional<ChassisStatus> CarClient::GetChassisStatus() const {
   return chassis_status_;
 }
 
-std::optional<EncoderDelta> CarClient::GetEncoderDelta() const {
-  return encoder_delta_;
+std::optional<EncoderCounts> CarClient::GetEncoderCounts() const {
+  return encoder_counts_;
 }
 
 std::optional<ImuRaw> CarClient::GetImuRaw() const {
@@ -75,14 +71,6 @@ std::optional<ImuRaw> CarClient::GetImuRaw() const {
 
 std::optional<DeviceStatus> CarClient::GetDeviceStatus() const {
   return device_status_;
-}
-
-std::optional<Odometry> CarClient::GetOdometry() const {
-  return odometry_;
-}
-
-std::optional<OdometryDebug> CarClient::GetOdometryDebug() const {
-  return odometry_debug_;
 }
 
 std::optional<ParamValue> CarClient::GetParamValue() const {
@@ -113,16 +101,12 @@ void CarClient::HandleFrame(const Frame& frame) {
   // 应在自己的模块中读取后再做队列或滤波。
   if (const auto* value = std::get_if<ChassisStatus>(&decoded.value())) {
     chassis_status_ = *value;
-  } else if (const auto* value = std::get_if<EncoderDelta>(&decoded.value())) {
-    encoder_delta_ = *value;
+  } else if (const auto* value = std::get_if<EncoderCounts>(&decoded.value())) {
+    encoder_counts_ = *value;
   } else if (const auto* value = std::get_if<ImuRaw>(&decoded.value())) {
     imu_raw_ = *value;
   } else if (const auto* value = std::get_if<DeviceStatus>(&decoded.value())) {
     device_status_ = *value;
-  } else if (const auto* value = std::get_if<Odometry>(&decoded.value())) {
-    odometry_ = *value;
-  } else if (const auto* value = std::get_if<OdometryDebug>(&decoded.value())) {
-    odometry_debug_ = *value;
   } else if (const auto* value = std::get_if<ParamValue>(&decoded.value())) {
     param_value_ = *value;
   } else if (const auto* value = std::get_if<Ack>(&decoded.value())) {

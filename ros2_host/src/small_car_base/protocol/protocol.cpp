@@ -17,7 +17,6 @@ namespace {
 constexpr std::size_t kHeaderSize = 6;
 constexpr std::size_t kMinFrameSize = 8;
 constexpr std::uint8_t kSyncBytes[] = {kSync0, kSync1};
-constexpr std::uint8_t kParamOdomReset = 1;
 constexpr std::uint8_t kParamOpSet = 1;
 constexpr std::uint8_t kParamOpGet = 2;
 
@@ -172,14 +171,6 @@ std::vector<std::uint8_t> MakeServoFrame(std::uint8_t seq,
   return EncodeFrame(static_cast<std::uint8_t>(Msg::kServo), seq, payload);
 }
 
-std::vector<std::uint8_t> MakeOdomResetFrame(std::uint8_t seq,
-                                             std::uint32_t host_time_ms) {
-  std::vector<std::uint8_t> payload;
-  PutU32(&payload, host_time_ms);
-  payload.push_back(kParamOdomReset);
-  return EncodeFrame(static_cast<std::uint8_t>(Msg::kParam), seq, payload);
-}
-
 std::vector<std::uint8_t> MakeParamSetFrame(std::uint8_t seq,
                                             std::uint8_t param_id,
                                             std::int32_t value,
@@ -226,14 +217,14 @@ std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
           ReadI16(payload, 11),
       };
     }
-    case Msg::kEncoderDelta: {
-      RequirePayloadSize(payload, 12);
-      return EncoderDelta{
+    case Msg::kEncoderCounts: {
+      RequirePayloadSize(payload, 20);
+      return EncoderCounts{
           ReadU32(payload, 0),
-          ReadI16(payload, 4),
-          ReadI16(payload, 6),
-          ReadI16(payload, 8),
-          ReadI16(payload, 10),
+          ReadI32(payload, 4),
+          ReadI32(payload, 8),
+          ReadI32(payload, 12),
+          ReadI32(payload, 16),
       };
     }
     case Msg::kImuRaw: {
@@ -261,34 +252,6 @@ std::optional<DecodedMessage> DecodePayload(const Frame& frame) {
     case Msg::kAck: {
       RequirePayloadSize(payload, 3);
       return Ack{payload[0], payload[1], payload[2]};
-    }
-    case Msg::kOdometry: {
-      RequirePayloadSize(payload, 40);
-      return Odometry{
-          ReadU32(payload, 0),
-          ReadI32(payload, 4),
-          ReadI32(payload, 8),
-          ReadI32(payload, 12),
-          ReadI32(payload, 16),
-          ReadI16(payload, 20),
-          ReadI32(payload, 22),
-          ReadI32(payload, 26),
-          ReadI32(payload, 30),
-          ReadI32(payload, 34),
-          payload[38] != 0,
-          payload[39] != 0,
-      };
-    }
-    case Msg::kOdometryDebug: {
-      RequirePayloadSize(payload, 14);
-      return OdometryDebug{
-          ReadU32(payload, 0),
-          ReadI16(payload, 4),
-          ReadI16(payload, 6),
-          ReadI16(payload, 8),
-          ReadI16(payload, 10),
-          ReadI16(payload, 12),
-      };
     }
     case Msg::kParamValue: {
       RequirePayloadSize(payload, 9);
@@ -388,10 +351,6 @@ std::vector<std::uint8_t> PacketCodec::Drive(std::int16_t linear_mm_s,
 std::vector<std::uint8_t> PacketCodec::Servo(std::uint16_t upper_us,
                                              std::uint16_t lower_us) {
   return MakeServoFrame(NextSeq(), upper_us, lower_us);
-}
-
-std::vector<std::uint8_t> PacketCodec::OdomReset() {
-  return MakeOdomResetFrame(NextSeq());
 }
 
 std::vector<std::uint8_t> PacketCodec::ParamSet(std::uint8_t param_id,
