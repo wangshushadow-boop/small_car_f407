@@ -16,6 +16,7 @@ def generate_launch_description():
     default_ekf_config = os.path.join(share, "config", "ekf.yaml")
 
     return LaunchDescription([
+        DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("base_config", default_value=default_base_config),
         DeclareLaunchArgument(
             "chassis_config", default_value=default_chassis_config
@@ -29,6 +30,7 @@ def generate_launch_description():
             parameters=[
                 LaunchConfiguration("base_config"),
                 {"chassis_config": LaunchConfiguration("chassis_config")},
+                {"use_sim_time": LaunchConfiguration("use_sim_time")},
             ],
         ),
         Node(
@@ -36,7 +38,10 @@ def generate_launch_description():
             executable="ekf_node",
             name="ekf_filter_node",
             output="screen",
-            parameters=[LaunchConfiguration("ekf_config")],
+            parameters=[
+                LaunchConfiguration("ekf_config"),
+                {"use_sim_time": LaunchConfiguration("use_sim_time")},
+            ],
             remappings=[("odometry/filtered", "odom")],
         ),
         IncludeLaunchDescription(
@@ -44,6 +49,9 @@ def generate_launch_description():
                 os.path.join(
                     description_share, "launch", "description.launch.py"
                 )
-            )
+            ),
+            launch_arguments={
+                "use_sim_time": LaunchConfiguration("use_sim_time")
+            }.items(),
         ),
     ])

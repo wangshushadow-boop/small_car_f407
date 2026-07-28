@@ -4,29 +4,25 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration
-from launch_ros.actions import ComposableNodeContainer, LoadComposableNodes, Node
-from launch_ros.descriptions import ComposableNode
-from launch_ros.parameter_descriptions import ParameterFile, ParameterValue
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import ComposableNodeContainer
+from launch_ros.parameter_descriptions import ParameterFile
 
 
 def generate_launch_description():
     nav2_share = get_package_share_directory("nav2_bringup")
     car_nav2_share = get_package_share_directory("small_car_nav2")
-    description_share = get_package_share_directory("small_car_description")
     base_share = get_package_share_directory("small_car_base")
 
     params_file = LaunchConfiguration("params_file")
     use_sim_time = LaunchConfiguration("use_sim_time")
     configured_params = ParameterFile(params_file, allow_substs=True)
-    robot_description = ParameterValue(
-        Command([
-            "xacro ",
-            os.path.join(
-                description_share, "urdf", "small_car.urdf.xacro"
-            ),
-        ]),
-        value_type=str,
+
+    base = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(base_share, "launch", "base.launch.py")
+        ),
+        launch_arguments={"use_sim_time": use_sim_time}.items(),
     )
 
     navigation = IncludeLaunchDescription(
@@ -55,48 +51,6 @@ def generate_launch_description():
         output="screen",
     )
 
-    description_component = LoadComposableNodes(
-        target_container="nav2_container",
-        composable_node_descriptions=[
-            ComposableNode(
-                package="robot_state_publisher",
-                plugin="robot_state_publisher::RobotStatePublisher",
-                name="robot_state_publisher",
-                parameters=[
-                    {
-                        "robot_description": robot_description,
-                        "use_sim_time": use_sim_time,
-                    }
-                ],
-                extra_arguments=[{"use_intra_process_comms": True}],
-            ),
-        ],
-    )
-
-    base_node = Node(
-        package="small_car_base",
-        executable="small_car_base_node",
-        name="small_car_base",
-        output="screen",
-        parameters=[
-            os.path.join(base_share, "config", "base.yaml"),
-            {
-                "chassis_config": os.path.join(
-                    base_share, "config", "chassis.yaml"
-                )
-            },
-        ],
-    )
-
-    ekf_node = Node(
-        package="robot_localization",
-        executable="ekf_node",
-        name="ekf_filter_node",
-        output="screen",
-        parameters=[os.path.join(base_share, "config", "ekf.yaml")],
-        remappings=[("odometry/filtered", "odom")],
-    )
-
     return LaunchDescription([
         DeclareLaunchArgument(
             "params_file",
@@ -105,9 +59,7 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
-        base_node,
-        ekf_node,
+        base,
         nav2_container,
         navigation,
-        description_component,
     ])
