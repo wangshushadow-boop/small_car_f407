@@ -1,5 +1,18 @@
 FROM ros:kilted-ros-base
 
+# 树莓派使用 ARM64 Ubuntu Ports；切换到国内镜像以加快 Docker 构建。
+# ROS 2 软件包使用独立镜像，pip 在下方继续使用清华 PyPI。
+ARG UBUNTU_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports
+ARG ROS2_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu
+
+RUN sed -i \
+      "s|http://ports.ubuntu.com/ubuntu-ports|${UBUNTU_MIRROR}|g" \
+      /etc/apt/sources.list.d/ubuntu.sources \
+    && sed -i \
+      -e "s|Types: deb deb-src|Types: deb|g" \
+      -e "s|http://packages.ros.org/ros2/ubuntu|${ROS2_MIRROR}|g" \
+      /etc/apt/sources.list.d/ros2.sources
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libyaml-cpp-dev \
       alsa-utils \

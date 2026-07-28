@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 
+#include "battery_monitor.h"
 #include "debug_uart.h"
 #include "encoder.h"
 #include "gamepad.h"
@@ -43,12 +44,11 @@ static uint32_t g_last_oled_report_tick = 0U;
 static uint32_t g_last_imu_reinit_tick = 0U;
 static bool g_imu_ok = false;
 
-static const char *SourceToText(ControlSource source);
 static void ReportChassisToHost(const ControlCommand *command);
 static void ReportEncoderToHost(void);
 static void ReportImuToHost(void);
 static void ReportDeviceToHost(void);
-static void ReportToOled(const ControlCommand *command);
+static void ReportToOled(void);
 
 void SystemStatus_Init(void)
 {
@@ -105,24 +105,7 @@ void SystemStatus_TaskStep(const ControlCommand *command)
   if ((now - g_last_oled_report_tick) >= OLED_REPORT_PERIOD_MS)
   {
     g_last_oled_report_tick = now;
-    ReportToOled(command);
-  }
-}
-
-static const char *SourceToText(ControlSource source)
-{
-  /* 文本仅供 OLED 摘要显示，不参与协议编码。 */
-  switch (source)
-  {
-    case CONTROL_SOURCE_HOST:
-      return "HOST";
-    case CONTROL_SOURCE_GAMEPAD:
-      return "PAD";
-    case CONTROL_SOURCE_SAFETY:
-      return "SAFE";
-    case CONTROL_SOURCE_NONE:
-    default:
-      return "NONE";
+    ReportToOled();
   }
 }
 
@@ -225,36 +208,29 @@ static void ReportDeviceToHost(void)
   RaspiLink_SendDeviceStatus(gamepad.connected, g_imu_ok, ultrasonic.valid, 0U);
 }
 
-static void ReportToOled(const ControlCommand *command)
+static void ReportToOled(void)
 {
   char line[24];
-  GamepadState gamepad = {0};
-  UltrasonicSample ultrasonic = {0};
+  BatterySample battery = {0};
+  const bool battery_valid = BatteryMonitor_GetSample(&battery);
 
-  (void)Gamepad_GetState(&gamepad);
-  (void)Ultrasonic_GetSample(&ultrasonic);
-
-  /* OLED 只显示低频摘要，避免占用主循环时间。 */
+  /* OLED 只显示电池电压和估算电量，保持一眼可读。 */
   Oled_Clear();
 
-  (void)snprintf(line, sizeof(line), "SRC:%s", SourceToText(command->source));
-  Oled_ShowString(0, 0, line);
-
-  (void)snprintf(line, sizeof(line), "F:%d T:%d", command->forward, command->turn);
-  Oled_ShowString(0, 10, line);
-
-  (void)snprintf(line, sizeof(line), "PAD:%s", gamepad.connected ? "OK" : "NO");
-  Oled_ShowString(0, 20, line);
-
-  if (ultrasonic.valid)
+  if (battery_valid)
   {
-    (void)snprintf(line, sizeof(line), "UL:%umm", ultrasonic.distance_mm);
+    (void)snprintf(line,
+                   sizeof(line),
+                   "%u.%02uV %u%%",
+                   (unsigned int)(battery.voltage_mv / 1000U),
+                   (unsigned int)((battery.voltage_mv % 1000U) / 10U),
+                   (unsigned int)battery.percent);
   }
   else
   {
-    (void)snprintf(line, sizeof(line), "UL:--");
+    (void)snprintf(line, sizeof(line), "--.--V --%%");
   }
-  Oled_ShowString(0, 30, line);
+  Oled_ShowString(0, 0, line);
 
   Oled_Refresh();
 }

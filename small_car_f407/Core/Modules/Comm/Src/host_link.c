@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "battery_monitor.h"
 #include "debug_uart.h"
 #include "main.h"
 #include "usart.h"
@@ -279,6 +280,7 @@ static void PrintLogHelp(void)
 
 static void PrintLogStatus(void)
 {
+  BatterySample battery = {0};
   DebugUart_Printf("[CMD] imu=%s pad=%s servo=%s motor=%s enc=%s ultra=%s\r\n",
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_IMU)),
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_GAMEPAD_DATA)),
@@ -286,4 +288,18 @@ static void PrintLogStatus(void)
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_MOTOR)),
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_ENCODER)),
                    BoolToText(DebugUart_IsLogEnabled(DEBUG_LOG_ULTRASONIC)));
+
+  if (BatteryMonitor_GetSample(&battery))
+  {
+    DebugUart_Printf("[BAT] raw=%u voltage=%u.%02uV percent=%u%% level=%u\r\n",
+                     (unsigned int)battery.raw_adc,
+                     (unsigned int)(battery.voltage_mv / 1000U),
+                     (unsigned int)((battery.voltage_mv % 1000U) / 10U),
+                     (unsigned int)battery.percent,
+                     (unsigned int)battery.level);
+  }
+  else
+  {
+    DebugUart_WriteString("[BAT] unavailable\r\n");
+  }
 }

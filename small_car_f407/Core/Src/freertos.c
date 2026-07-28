@@ -25,6 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "battery_monitor.h"
 #include "chassis.h"
 #include "control_mux.h"
 #include "debug_uart.h"
@@ -159,6 +160,7 @@ void StartDefaultTask(void *argument)
     RaspiLink_TaskStep();
     Ultrasonic_TaskStep();
     Encoder_TaskStep();
+    BatteryMonitor_TaskStep();
 
     ControlCommand command;
     /* 鎺у埗浠茶鍐冲畾搴曠洏鏈€缁堝惉璋佺殑鍛戒护銆?*/

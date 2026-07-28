@@ -62,6 +62,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Motor/Src/encoder.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Motor/Src/motor.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Motor/Src/wheel_speed_controller.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Sensors/Src/battery_monitor.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Sensors/Src/icm20948.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Modules/Sensors/Src/ultrasonic.c
 )

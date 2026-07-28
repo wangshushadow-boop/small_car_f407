@@ -28,6 +28,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "battery_monitor.h"
 #include "chassis.h"
 #include "chassis_params.h"
 #include "control_mux.h"
@@ -130,6 +131,7 @@ int main(void)
   ChassisParams_Init();
   DebugUart_Init();
   DebugUart_WriteStringIf(DEBUG_LOG_BOOT, "\r\n[BOOT] Debug UART1 ready, 115200 8N1\r\n");
+  BatteryMonitor_Init();
   Oled_Init();
   /* IMU 初始化状态会打印出来，status=0 表示初始化成功。 */
   Icm20948Status imu_status = Icm20948_Init();

@@ -131,6 +131,7 @@ static const uint8_t *Oled_GetGlyph(char ch)
   static const uint8_t colon[5] = {0x00, 0x36, 0x36, 0x00, 0x00};
   static const uint8_t dot[5] = {0x00, 0x40, 0x60, 0x00, 0x00};
   static const uint8_t dash[5] = {0x08, 0x08, 0x08, 0x08, 0x08};
+  static const uint8_t percent[5] = {0x23, 0x13, 0x08, 0x64, 0x62};
 
   if (ch >= 'a' && ch <= 'z')
   {
@@ -160,6 +161,11 @@ static const uint8_t *Oled_GetGlyph(char ch)
   if (ch == '-')
   {
     return dash;
+  }
+
+  if (ch == '%')
+  {
+    return percent;
   }
 
   return blank;
