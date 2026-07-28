@@ -1,54 +1,43 @@
 # 树莓派端架构
 
-## 运行时进程
+## 运行进程
 
-最终导航运行时包含三个核心进程：
+`system.launch.py` 通过 `base.launch.py` 复用底盘启动逻辑，完整系统包含：
 
-1. `small_car_base_node`：独占 MCU 串口，执行协议转换、硬限幅、失效停车、
-   云台控制和底盘遥测发布。
-2. `ekf_filter_node`：融合轮式速度和 IMU Z 轴角速度，发布 `/odom` 和
-   `odom -> base_link`。
-3. `nav2_container`：按 Nav2 官方 Composition 方式承载 Planner、Controller、
-   Behavior、Velocity Smoother、Collision Monitor、生命周期管理器以及
-   `robot_state_publisher`。
+1. `small_car_base_node`：独占 MCU 串口，发布原始传感器并执行最终安全限制。
+2. `ekf_filter_node`：融合轮速与 IMU Z 轴角速度，发布 `/odom` 和动态 TF。
+3. `robot_state_publisher`：读取 URDF，发布固定 TF。
+4. `nav2_container`：承载 Nav2 Planner、Controller、Behavior 和安全组件。
 
-语音、标定和串口监视工具是运维工具，不得直接打开正在被
-`small_car_base_node` 占用的串口。
+底盘、EKF 和机器人模型均为独立节点，不在 `nav2_container` 内重复创建。
 
 ## 控制链
 
 ```text
-Nav2 Controller / Behavior
-  -> cmd_vel_nav
+Nav2 Controller
   -> Velocity Smoother
-  -> cmd_vel_smoothed
   -> Collision Monitor
-  -> /cmd_vel (TwistStamped)
+  -> /cmd_vel
   -> small_car_base_node
-  -> CommandSafety
   -> MCU
 ```
 
-`/cmd_vel` 是底盘唯一的 ROS 速度入口。`/cmd_vel_mcu` 已删除，进程内部使用
-普通 C++ 类型和函数调用。
+`/cmd_vel` 是唯一速度入口。Nav2 负责规划、平滑和环境碰撞监控；底盘节点仍执行硬限幅、时间戳检查、命令超时和串口故障停车。
 
 ## 状态估计链
 
 ```text
-MCU EncoderCounts -> /wheel/odom_raw --+
+MCU 累计编码器 -> /wheel/odom_raw --+
                                       +-> robot_localization -> /odom
-MCU ImuRaw -------> /imu/data_raw ----+                       -> odom -> base_link
+MCU 原始 IMU ----> /imu/data_raw -----+                       -> odom -> base_link
 ```
 
-MCU 不再计算或上传位姿。底盘节点只完成累计编码器运动学换算和 IMU SI
-单位转换；Nav2 只消费 EKF 的 `/odom`。以后接入 SLAM 或 AMCL 时，由定位模块
-补充 `map -> odom`，本地 EKF 链路保持不变。
+MCU 不计算位姿。底盘节点完成编码器运动学换算和 IMU SI 单位转换，`robot_localization` 负责融合。接入 SLAM 或 AMCL 后，由定位模块补充 `map -> odom`。
 
 ## 设计约束
 
-- 只有 `ros/` 模块可以依赖 `rclcpp` 和 ROS 消息。
 - `protocol` 不访问串口，`transport` 不理解协议。
 - `mcu` 组合协议与传输，但不创建 ROS 接口。
-- `control` 和 `servo` 使用 SI 单位，不依赖 ROS。
-- Nav2 负责规划、正常速度平滑与环境碰撞监控。
-- 底盘节点始终保留速度硬限幅、命令时间戳检查、超时停车和串口故障停车。
+- `control`、`servo` 使用 SI 单位且不依赖 ROS。
+- 只有 `ros` 层转换 ROS 消息并调度其他模块。
+- 同一时间只能有一个进程占用 MCU 串口。

@@ -1,62 +1,41 @@
 # 树莓派上位机
 
-`rpi_host` 是 ROS 2/Nav2 与 STM32F407 底盘之间的上位机工程。STM32 负责电机、
-编码器、IMU、超声和安全实时任务；树莓派负责导航、语音、视觉、设备接入和诊断。
-
-## 运行时边界
-
-- `small_car_base_node`：唯一自研底盘进程，独占 MCU 串口。
-- `ekf_filter_node`：融合 `/wheel/odom_raw` 与 `/imu/data_raw`，统一发布
-  `/odom` 和 `odom -> base_link`。
-- `nav2_container`：按官方 Composition 方式运行 Nav2 组件和
-  `robot_state_publisher`。
-
-底盘速度只通过 `/cmd_vel` `geometry_msgs/msg/TwistStamped` 输入。
-云台继续使用 `/servo_controller/joint_trajectory`，关节名为
-`upper_servo_joint` 和 `lower_servo_joint`。
+`ros2_host` 连接 STM32F407 底盘与 ROS 2/Nav2。MCU 负责电机闭环、传感器采集和实时安全；树莓派负责协议转换、状态估计、导航及上层应用。
 
 ## 目录
 
-| 目录 | 说明 |
+| 路径 | 内容 |
 | --- | --- |
-| `src/small_car_base` | 串口、协议、控制安全、云台和唯一底盘节点 |
-| `src/small_car_description` | URDF/Xacro、RViz 和机器人描述 |
-| `src/small_car_nav2` | Nav2 参数和官方组件化启动 |
-| `apps` | 独立诊断与硬件测试工具 |
-| `docs` | 架构、模块、ROS 接口和迁移文档 |
-| `ros2` | ROS 2 Dockerfile 与 Compose 配置 |
-| `tools` | 语音、USB 恢复和辅助脚本 |
+| `src/small_car_base` | MCU 通信、底盘安全、ROS 接口与 EKF 配置 |
+| `src/small_car_description` | URDF、RViz 和固定 TF |
+| `src/small_car_nav2` | Nav2 参数与整机启动入口 |
+| `apps` | 无 ROS 依赖的诊断工具 |
+| `ros2` | Dockerfile 与 Compose |
+| `scripts` | WSL 环境和一键部署脚本 |
+| `tools`、`systemd` | 语音及 MCU USB 恢复工具 |
+
+## 启动入口
+
+- `small_car_base/launch/base.launch.py`：启动底盘节点、EKF 和机器人模型。
+- `small_car_nav2/launch/system.launch.py`：包含 `base.launch.py`，再启动 Nav2。
+
+容器默认执行 `ros2 launch small_car_nav2 system.launch.py`。
 
 ## 文档
 
-- [总体架构](docs/architecture.md)
-- [模块边界](docs/modules.md)
+- [部署与验收](docs/deployment.md)
+- [日常运维](operations.md)
+- [架构与数据流](docs/architecture.md)
 - [ROS 2 接口](docs/ros_interfaces.md)
-- [Nav2 集成](docs/nav2_integration.md)
-- [树莓派部署](docs/deployment.md)
-- [迁移说明](docs/migration.md)
-- [运维命令](operations.md)
-- [硬件说明](hardware.md)
+- [Nav2 配置](docs/nav2_integration.md)
+- [模块边界](docs/modules.md)
+- [硬件连接](hardware.md)
+- [历史迁移](docs/migration.md)
 
-## 构建和启动
+## 快速部署
 
-```bash
-cd /workspace/rpi_host
-source /opt/ros/kilted/setup.bash
-colcon --log-base log-ros build --base-paths src \
-  --build-base build-ros --install-base install-ros --symlink-install
-source install-ros/setup.bash
-ros2 launch small_car_nav2 system.launch.py
+```powershell
+.\ros2_host\scripts\sync_rpi_host.ps1
 ```
 
-容器部署：
-
-```bash
-cd ~/small_car_f407/rpi_host/ros2
-docker compose up --build -d
-docker compose logs -f
-```
-
-Dockerfile 已安装 Nav2 和 `robot_localization`，Compose 默认启动底盘桥接、
-EKF 与 `nav2_container`。当前使用 odom-only 滚动代价地图；接入定位后再切换到
-`map -> odom` 和静态地图配置。
+脚本上传源码、运行宿主机测试，并重建和启动 ROS 2 容器。

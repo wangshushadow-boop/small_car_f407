@@ -1,78 +1,42 @@
 # ROS 2 接口
 
-## 稳定命令接口
+## 命令
 
-| 名称 | 类型 | 方向 | Owner |
-| --- | --- | --- | --- |
-| `/cmd_vel` | `geometry_msgs/msg/TwistStamped` | 底盘订阅 | Nav2 Collision Monitor |
-| `/servo_controller/joint_trajectory` | `trajectory_msgs/msg/JointTrajectory` | 底盘订阅 | 云台业务模块 |
+| 名称 | 类型 | 使用方 |
+| --- | --- | --- |
+| `/cmd_vel` | `geometry_msgs/msg/TwistStamped` | 底盘订阅，唯一速度入口 |
+| `/servo_controller/joint_trajectory` | `trajectory_msgs/msg/JointTrajectory` | 云台订阅 |
 
-`/cmd_vel` 必须携带非零时间戳；超过 `cmd_vel_timeout_ms` 或明显来自未来的命令
-会被拒绝。底盘仅使用 `twist.linear.x` 和 `twist.angular.z`。
+`/cmd_vel` 必须携带有效时间戳；底盘只使用 `linear.x` 和 `angular.z`。云台关节名为 `upper_servo_joint`、`lower_servo_joint`。
 
-云台 Topic 名保持兼容，关节名已改为：
+## 状态
 
-- `upper_servo_joint`
-- `lower_servo_joint`
-
-## 稳定状态接口
-
-| 名称 | 类型 | Owner |
+| 名称 | 类型 | 发布者 |
 | --- | --- | --- |
 | `/wheel/odom_raw` | `nav_msgs/msg/Odometry` | `small_car_base_node` |
 | `/imu/data_raw` | `sensor_msgs/msg/Imu` | `small_car_base_node` |
 | `/odom` | `nav_msgs/msg/Odometry` | `robot_localization` |
 | `/ultrasonic/front` | `sensor_msgs/msg/Range` | `small_car_base_node` |
 | `/joint_states` | `sensor_msgs/msg/JointState` | `small_car_base_node` |
-| `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | `small_car_base_node` |
-| `/tf` | `tf2_msgs/msg/TFMessage` | `robot_localization` 和 Nav2 定位 |
+| `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | 底盘与 EKF |
+| `/tf` | `tf2_msgs/msg/TFMessage` | 动态 TF 发布者 |
 | `/tf_static` | `tf2_msgs/msg/TFMessage` | `robot_state_publisher` |
 
-## 调试接口
+`/wheel/odom_raw` 和 `/imu/data_raw` 只作为 EKF 输入；Nav2 使用融合后的 `/odom`。IMU 的 `orientation_covariance[0] = -1` 表示姿态不可用。
 
-| 名称 | 类型 | 默认 |
-| --- | --- | --- |
-| `/debug/nav2/front_stop_polygon` | Collision Monitor 可视化 | 按 Nav2 配置 |
+## 坐标系
 
-`/wheel/odom_raw` 和 `/imu/data_raw` 是 EKF 输入，不应直接提供给 Nav2。
-`robot_localization` 将融合结果统一发布为 `/odom`，并独占
-`odom -> base_link` 动态 TF。
+- `robot_localization` 唯一发布 `odom -> base_link`。
+- `robot_state_publisher` 发布传感器和底盘的 URDF 固定关系。
+- SLAM 或 AMCL 负责未来的 `map -> odom`。
 
-## 运行时底盘参数
+## 在线参数
 
-以下易变参数由 `small_car_base` 的 ROS Parameter Server 提供：
-
-- `wheel_speed_closed_loop_enabled`
-- `wheel_speed_kp_x100`
-- `wheel_speed_ki_x100`
-- `wheel_speed_integral_limit`
-- `wheel_accel_limit_mm_s2`
-- `wheel_pwm_min`
-- `wheel_left_output_permille`
-- `wheel_right_output_permille`
-
-查看和调整参数：
+允许在线调整轮速闭环、加速度限制、最小 PWM 和左右轮补偿。例如：
 
 ```bash
 ros2 param get /small_car_base wheel_pwm_min
 ros2 param set /small_car_base wheel_pwm_min 550
 ```
 
-节点先校验整数类型和合法范围，再写入 MCU 并立即回读。只有回读值与请求值
-一致时 `ros2 param set` 才返回成功，随后 `ros2 param get` 显示新的运行值。
-也可以使用 RQt 的 Dynamic Reconfigure 插件进行可视化调参。
-
-运行时调整不修改 `chassis.yaml`，节点或 MCU 重启后恢复 YAML 配置。里程计、
-IMU、速度上限等标定或安全参数不开放在线修改。
-
-## 已删除接口
-
-- `/cmd_vel_mcu`
-- `/control/source`
-- `/imu/data`
-- `/debug/imu/raw`
-- `/reset_odometry`
-- 自研 `/spin`
-- 自研 `/drive_on_heading`
-
-`Spin` 和 `DriveOnHeading` 由 Nav2 Behavior Server 提供。
+节点校验参数并写入 MCU，回读一致后才返回成功。在线修改不会写回 `config/chassis.yaml`。

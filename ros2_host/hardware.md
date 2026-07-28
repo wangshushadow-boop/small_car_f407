@@ -1,68 +1,47 @@
 # 树莓派相关硬件文档
 
-本文只记录树莓派侧会直接接触的硬件和设备。STM32 主控板引脚细节见仓库根目录 `docs/` 下的板级文档。
+只记录树莓派直接接触的设备；STM32 引脚和板级细节见固件文档。
 
-## 硬件组成
+## 设备
 
-| 硬件 | 连接位置 | 用途 |
-| --- | --- | --- |
-| 树莓派 | 小车上层安装板 | 运行 ROS2、算法、调试工具和语音/视觉程序。 |
-| STM32F407 主控板 | 通过 USB 串口连接树莓派 | 负责实时采集、手柄优先级、安全保护、电机和舵机输出。 |
-| USB 摄像头 C100 | 树莓派 USB | 图像采集，通常识别为 `/dev/video0`。 |
-| Jabra USB 麦克风/音响 | 树莓派 USB | 语音输入和音频播放。 |
-| ST-LINK | 树莓派 USB，可选 | 通过树莓派给 STM32 烧录固件。 |
-| 超声模块 | 接到 MCU | MCU 采集后通过串口协议上传给树莓派。 |
-| ICM20948 IMU | MCU 板载 | MCU 采集并融合后上传里程计和姿态。 |
-| 编码器电机 | 接到 MCU | MCU 采集编码器并控制四轮电机。 |
-
-## 串口连接
-
-| 项目 | 说明 |
+| 硬件 | 连接与用途 |
 | --- | --- |
-| 树莓派侧设备 | 固定硬件路径 `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5C2C059301-if00`。 |
-| ROS2 容器设备 | 固定映射为 `/dev/small_car_mcu`，不受 `ttyACM0/1` 编号变化影响。 |
-| 波特率 | `115200` |
-| 数据格式 | `8N1` |
-| 协议 | MCU 与树莓派二进制短帧协议。 |
-| 用途 | 控制命令下发、参数下发、传感器和里程计上传。 |
+| STM32F407 | USB 串口；执行电机闭环、安全任务并上传累计编码器和原始传感器 |
+| USB 摄像头 | 通常为 `/dev/video0` |
+| Jabra USB 音频 | 麦克风和扬声器 |
+| ST-LINK | 可选；通过 SWD 烧录 STM32 |
+| 超声、ICM20948、编码器 | 接入 MCU，由 MCU 采集后上传 |
 
-注意：同一时间只能有一个程序占用串口。运行 `sensor_monitor` 或 CLI 前，先停止 ROS2 bridge。
+## MCU 串口
 
-## USB 摄像头
-
-| 项目 | 说明 |
+| 项目 | 配置 |
 | --- | --- |
-| 设备路径 | 常见为 `/dev/video0` |
-| 常用分辨率 | `1920x1080`、`1280x720` |
-| 常用格式 | `MJPG`、`YUYV` |
-| 当前工具 | `camera_capture`、`v4l2_capture` |
+| 固定设备路径 | `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5C2C059301-if00` |
+| 容器路径 | `/dev/small_car_mcu` |
+| 参数 | `115200 8N1` |
+| 协议 | 二进制协议 v3 |
 
-## USB 音频
+同一时间只能有一个程序占用串口。运行诊断工具前先停止 Compose。
 
-| 项目 | 说明 |
-| --- | --- |
-| 设备 | Jabra USB 麦克风/音响 |
-| 录音建议 | `16000 Hz`、单声道、`S16_LE` |
-| 播放建议 | 以实际设备能力为准，Jabra 常用 `48000 Hz` |
-| 当前工具 | `audio_loopback`、`tools/jabra_record_playback.sh` |
+## 摄像头与音频
 
-## ST-LINK 烧录
+```bash
+v4l2-ctl --list-devices
+v4l2-ctl -d /dev/video0 --list-formats-ext
+arecord -l
+aplay -l
+```
 
-| 项目 | 说明 |
-| --- | --- |
-| 连接 | ST-LINK 插树莓派 USB，SWD 接 STM32 主控板。 |
-| 工具 | `stlink-tools` |
-| 常用命令 | `sudo st-info --probe`、`sudo st-flash --reset write ...` |
+## ST-LINK
 
-如果 ST-LINK 操作 timeout，优先检查 USB 供电、SWD 接线、目标板供电和 ST-LINK 是否被其他进程占用。
+```bash
+sudo apt install -y stlink-tools
+sudo st-info --probe
+sudo st-flash --reset write small_car_f407.bin 0x08000000
+```
 
-## URDF 建模依据
+发生 timeout 时检查 USB 供电、SWD 接线、目标板供电和工具占用。克隆版 ST-LINK 长文件写入不稳定时，应降低 SWD 频率或按 Flash 扇区分段写入并回读校验。
 
-| 部件 | 建模说明 |
-| --- | --- |
-| 底盘 | R3X 四驱底盘，厂家尺寸约 `203.5 mm x 145 mm x 76 mm`。 |
-| MCU 板 | 与树莓派尺寸接近，位于树莓派下方，IMU 水平安装。 |
-| 云台相机 | 双自由度云台，上方舵机通过横轴连接相机。 |
-| 超声 | 前向安装，用于近距离避障。 |
+## URDF 建模
 
-URDF 只用于 ROS2/RViz 显示和 TF 关系，不参与 MCU 里程计参数计算。
+URDF 描述底盘、IMU、超声和云台安装关系，只用于 TF 与可视化，不参与 MCU 控制或里程计参数计算。
