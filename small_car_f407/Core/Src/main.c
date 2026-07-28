@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
+#include "adc.h"
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
@@ -118,6 +119,7 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM5_Init();
   MX_USART3_UART_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   /*
    * 业务模块初始化顺序：
