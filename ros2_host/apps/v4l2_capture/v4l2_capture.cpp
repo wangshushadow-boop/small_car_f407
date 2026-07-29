@@ -38,6 +38,30 @@ int Xioctl(int fd, unsigned long request, void *arg) {
   return ret;
 }
 
+/** 按照停止采集、解除映射、关闭设备的顺序释放 V4L2 资源。 */
+void CleanupCapture(int fd, bool streaming, std::vector<Buffer> *buffers) {
+  if (streaming) {
+    v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (Xioctl(fd, VIDIOC_STREAMOFF, &type) < 0) {
+      std::perror("VIDIOC_STREAMOFF");
+    }
+  }
+
+  for (Buffer &buffer : *buffers) {
+    if ((buffer.start != nullptr) && (buffer.start != MAP_FAILED)) {
+      if (munmap(buffer.start, buffer.length) < 0) {
+        std::perror("munmap");
+      }
+      buffer.start = nullptr;
+      buffer.length = 0;
+    }
+  }
+
+  if (fd >= 0) {
+    close(fd);
+  }
+}
+
 /** 将十进制命令行参数转换为整数，失败时使用默认值。 */
 int ParseInt(const char *text, int fallback) {
   if (text == nullptr) {
@@ -178,11 +202,13 @@ int main(int argc, char *argv[]) {
     std::perror("open camera");
     return 1;
   }
+  std::vector<Buffer> buffers;
+  bool streaming = false;
 
   v4l2_capability capability {};
   if (Xioctl(fd, VIDIOC_QUERYCAP, &capability) < 0) {
     std::perror("VIDIOC_QUERYCAP");
-    close(fd);
+    CleanupCapture(fd, streaming, &buffers);
     return 1;
   }
 
@@ -195,7 +221,7 @@ int main(int argc, char *argv[]) {
   format.fmt.pix.field = V4L2_FIELD_NONE;
   if (Xioctl(fd, VIDIOC_S_FMT, &format) < 0) {
     std::perror("VIDIOC_S_FMT");
-    close(fd);
+    CleanupCapture(fd, streaming, &buffers);
     return 1;
   }
 
@@ -214,12 +240,12 @@ int main(int argc, char *argv[]) {
   request.memory = V4L2_MEMORY_MMAP;
   if (Xioctl(fd, VIDIOC_REQBUFS, &request) < 0) {
     std::perror("VIDIOC_REQBUFS");
-    close(fd);
+    CleanupCapture(fd, streaming, &buffers);
     return 1;
   }
 
   // 使用 mmap 让驱动直接把图像写入共享缓冲区，避免额外拷贝。
-  std::vector<Buffer> buffers(request.count);
+  buffers.resize(request.count);
   // 第四步：把全部缓冲区排入采集队列后启动视频流。
   for (uint32_t i = 0; i < request.count; ++i) {
     v4l2_buffer buffer {};
@@ -228,7 +254,7 @@ int main(int argc, char *argv[]) {
     buffer.index = i;
     if (Xioctl(fd, VIDIOC_QUERYBUF, &buffer) < 0) {
       std::perror("VIDIOC_QUERYBUF");
-      close(fd);
+      CleanupCapture(fd, streaming, &buffers);
       return 1;
     }
 
@@ -237,7 +263,7 @@ int main(int argc, char *argv[]) {
                             fd, static_cast<off_t>(buffer.m.offset));
     if (buffers[i].start == MAP_FAILED) {
       std::perror("mmap");
-      close(fd);
+      CleanupCapture(fd, streaming, &buffers);
       return 1;
     }
   }
@@ -249,7 +275,7 @@ int main(int argc, char *argv[]) {
     buffer.index = i;
     if (Xioctl(fd, VIDIOC_QBUF, &buffer) < 0) {
       std::perror("VIDIOC_QBUF");
-      close(fd);
+      CleanupCapture(fd, streaming, &buffers);
       return 1;
     }
   }
@@ -257,9 +283,10 @@ int main(int argc, char *argv[]) {
   v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   if (Xioctl(fd, VIDIOC_STREAMON, &type) < 0) {
     std::perror("VIDIOC_STREAMON");
-    close(fd);
+    CleanupCapture(fd, streaming, &buffers);
     return 1;
   }
+  streaming = true;
 
   v4l2_buffer frame {};
   for (int i = 0; i < 8; ++i) {
@@ -269,14 +296,14 @@ int main(int argc, char *argv[]) {
     frame.memory = V4L2_MEMORY_MMAP;
     if (Xioctl(fd, VIDIOC_DQBUF, &frame) < 0) {
       std::perror("VIDIOC_DQBUF");
-      close(fd);
+      CleanupCapture(fd, streaming, &buffers);
       return 1;
     }
 
     if (i < 7) {
       if (Xioctl(fd, VIDIOC_QBUF, &frame) < 0) {
         std::perror("VIDIOC_QBUF");
-        close(fd);
+        CleanupCapture(fd, streaming, &buffers);
         return 1;
       }
     }
@@ -299,16 +326,7 @@ int main(int argc, char *argv[]) {
   }
 
   // 第六步：无论文件保存是否成功，都停止视频流并释放 mmap/文件描述符。
-  if (Xioctl(fd, VIDIOC_STREAMOFF, &type) < 0) {
-    std::perror("VIDIOC_STREAMOFF");
-  }
-
-  for (const Buffer &buffer : buffers) {
-    if ((buffer.start != nullptr) && (buffer.start != MAP_FAILED)) {
-      munmap(buffer.start, buffer.length);
-    }
-  }
-  close(fd);
+  CleanupCapture(fd, streaming, &buffers);
 
   if (!ok) {
     std::cerr << "Failed to save output: " << output_path << std::endl;
