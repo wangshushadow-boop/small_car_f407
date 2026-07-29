@@ -1,5 +1,5 @@
-﻿#打包并上传 rpi_host。
-#停止旧容器。
+﻿# 打包并上传 ros2_host。
+# 停止旧容器。
 [CmdletBinding()]
 param(
   # 上位机地址。
@@ -9,7 +9,7 @@ param(
   [string]$UserName = "ubuntu",
 
   # 上位机上的部署目录。
-  [string]$RemoteProject = "/home/ubuntu/small_car_f407/rpi_host",
+  [string]$RemoteProject = "/home/ubuntu/small_car_f407/ros2_host",
 
   # SSH 端口。
   [int]$SshPort = 22
@@ -24,7 +24,7 @@ $workspaceRoot = Split-Path -Parent $sourceRoot
 $sourceName = Split-Path -Leaf $sourceRoot
 
 # 创建本地临时压缩包。
-$archiveName = "small_car_rpi_host_$([guid]::NewGuid().ToString('N')).tar.gz"
+$archiveName = "small_car_ros2_host_$([guid]::NewGuid().ToString('N')).tar.gz"
 $archivePath = Join-Path $env:TEMP $archiveName
 $remoteArchive = "/tmp/$archiveName"
 $remoteTarget = "${UserName}@${HostAddress}"

@@ -40,4 +40,4 @@ RUN pip3 install --break-system-packages --no-cache-dir \
       --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
       --timeout 120 --retries 10 sounddevice
 
-WORKDIR /workspace/rpi_host
+WORKDIR /workspace/ros2_host

@@ -3,7 +3,7 @@
 ## 环境
 
 - 上位机：`ubuntu@192.168.3.85`，Raspberry Pi 5/aarch64。
-- 部署目录：`~/small_car_f407/rpi_host`。
+- 部署目录：`~/small_car_f407/ros2_host`。
 - 容器：ROS 2 Kilted，镜像 `small-car-ros2:kilted`。
 - MCU 容器设备：`/dev/small_car_mcu`。
 
@@ -12,7 +12,7 @@ Windows 需要 `tar`、`scp`、`ssh`；树莓派需要 Docker、Compose 和 CMak
 ## 一键部署
 
 ```powershell
-.\ros2_host\scripts\sync_rpi_host.ps1
+.\ros2_host\scripts\sync_ros2_host.ps1
 ```
 
 脚本依次打包并上传源码、替换板端目录、构建宿主机工具、运行 CTest，然后执行：
@@ -27,7 +27,7 @@ docker compose up --build -d --force-recreate
 
 ```bash
 ssh ubuntu@192.168.3.85
-cd ~/small_car_f407/rpi_host/ros2
+cd ~/small_car_f407/ros2_host/ros2
 docker compose ps
 docker compose logs -f small_car_ros2
 ```
@@ -45,7 +45,7 @@ Managed nodes are active
 ```bash
 docker compose exec small_car_ros2 bash
 source /opt/ros/kilted/setup.bash
-source /workspace/rpi_host/install-ros/setup.bash
+source /workspace/ros2_host/install-ros/setup.bash
 ros2 topic echo /wheel/odom_raw --once
 ros2 topic echo /imu/data_raw --once
 ros2 topic echo /odom --once

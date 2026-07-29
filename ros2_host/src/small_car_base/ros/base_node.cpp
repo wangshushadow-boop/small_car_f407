@@ -110,7 +110,7 @@ class SmallCarBaseNode : public rclcpp::Node {
     declare_parameter<double>("command_rate_hz", 20.0);
     declare_parameter<std::string>(
         "mcu_recovery_request",
-        "/workspace/rpi_host/runtime/mcu_recovery.request");
+        "/workspace/ros2_host/runtime/mcu_recovery.request");
     declare_parameter<std::string>("odom_frame", "odom");
     declare_parameter<std::string>("base_frame", "base_link");
     declare_parameter<std::string>("imu_frame", "imu_link");

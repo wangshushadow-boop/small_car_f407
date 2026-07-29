@@ -11,7 +11,7 @@ services:
       - /dev/snd:/dev/snd
       - /dev/video0:/dev/video0
     volumes:
-      - ..:/workspace/rpi_host
+      - ..:/workspace/ros2_host
       - /home/ubuntu/.hermes:/home/ubuntu/.hermes
       # Hermes 虚拟环境的 Python 是指向 uv 目录的符号链接，需同时挂载链接目标。
       - /home/ubuntu/.local/share/uv:/home/ubuntu/.local/share/uv:ro
@@ -26,11 +26,11 @@ services:
       CAR_VOICE_WAKE_ON_ANY_SPEECH: "false"
       CAR_VOICE_SENSEVOICE_PYTHON: /home/ubuntu/.hermes/sensevoice-venv/bin/python
       CAR_VOICE_SENSEVOICE_SCRIPT: /home/ubuntu/.hermes/car_voice/sensevoice_transcribe.py
-      CAR_VOICE_CAMERA_CAPTURE_BIN: /workspace/rpi_host/build/v4l2_capture
+      CAR_VOICE_CAMERA_CAPTURE_BIN: /workspace/ros2_host/build/v4l2_capture
       CAR_VOICE_CAMERA_DEVICE: /dev/video0
       CAR_VOICE_FORWARD_SPEED_MPS: "0.30"
       CAR_VOICE_REVERSE_SPEED_MPS: "0.25"
-    working_dir: /workspace/rpi_host
+    working_dir: /workspace/ros2_host
     command: >-
       bash -lc "source /opt/ros/kilted/setup.bash &&
       colcon --log-base log-ros build

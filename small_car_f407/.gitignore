@@ -1,9 +1,6 @@
 # Build outputs
 build/
 cmake-build-*/
-rpi_host/build*/
-rpi_host/install/
-rpi_host/log/
 out/
 bin/
 obj/
@@ -84,4 +81,3 @@ Desktop.ini
 *.bak
 *.orig
 __pycache__/
-rpi_host/runtime/*.request

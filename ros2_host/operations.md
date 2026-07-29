@@ -1,11 +1,11 @@
 # 树莓派操作文档
 
-默认上位机为 `ubuntu@192.168.3.85`，部署目录为 `~/small_car_f407/rpi_host`。首次部署见 [部署文档](docs/deployment.md)。
+默认上位机为 `ubuntu@192.168.3.85`，部署目录为 `~/small_car_f407/ros2_host`。首次部署见 [部署文档](docs/deployment.md)。
 
 ## Compose
 
 ```bash
-cd ~/small_car_f407/rpi_host/ros2
+cd ~/small_car_f407/ros2_host/ros2
 docker compose ps
 docker compose logs -f small_car_ros2
 docker compose restart small_car_ros2
@@ -20,7 +20,7 @@ docker compose up -d
 ```bash
 docker compose exec small_car_ros2 bash
 source /opt/ros/kilted/setup.bash
-source /workspace/rpi_host/install-ros/setup.bash
+source /workspace/ros2_host/install-ros/setup.bash
 ```
 
 ## ROS 2 检查
@@ -76,7 +76,7 @@ ros2 param set /small_car_base wheel_pwm_min 550
 工具会独占 MCU 串口，使用前先执行 `docker compose down`。
 
 ```bash
-cd ~/small_car_f407/rpi_host
+cd ~/small_car_f407/ros2_host
 ./build-host/sensor_monitor --port /dev/ttyACM0 --imu --enc --ultra
 ./build-host/sensor_monitor --port /dev/ttyACM0 --all --interval-ms 300
 ./build-host/small_car_host_cli --port /dev/ttyACM0 stop
@@ -100,7 +100,7 @@ PC 地址变化后同步修改 `config/fastdds_wsl.xml`；若 WSL 只有 `lo` �
 ```bash
 docker compose logs -f | grep -E "Voice daemon|Transcript|Intent|Motion"
 docker compose exec small_car_ros2 \
-  python3 /workspace/rpi_host/tools/hermes_voice_daemon.py --test-motion 小车前进
+  python3 /workspace/ros2_host/tools/hermes_voice_daemon.py --test-motion 小车前进
 ```
 
 ## MCU USB 恢复

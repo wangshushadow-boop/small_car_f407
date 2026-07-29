@@ -37,7 +37,7 @@ small_car_f407/
 ├── Middlewares/          # FreeRTOS、USB Host 中间件
 ├── cmake/                # 工具链配置和 CubeMX CMake 集成
 ├── docs/                 # 项目文档（中文）
-├── rpi_host/             # 树莓派 ROS2 相关代码
+├── ../ros2_host/         # 树莓派 ROS2 相关代码
 ├── CMakeLists.txt        # 用户自己的构建配置
 ├── CMakePresets.json     # Debug/Release preset
 └── small_car_f407.ioc    # STM32CubeMX 工程文件

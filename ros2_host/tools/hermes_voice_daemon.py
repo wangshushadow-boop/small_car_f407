@@ -52,7 +52,7 @@ SENSEVOICE_SCRIPT = os.getenv(
 )
 CAMERA_CAPTURE_BIN = os.getenv(
     "CAR_VOICE_CAMERA_CAPTURE_BIN",
-    "/home/ubuntu/small_car_f407/rpi_host/build-v4l2/v4l2_capture",
+    "/home/ubuntu/small_car_f407/ros2_host/build-v4l2/v4l2_capture",
 )
 CAMERA_DEVICE = os.getenv("CAR_VOICE_CAMERA_DEVICE", "/dev/video0")
 CAMERA_WIDTH = int(os.getenv("CAR_VOICE_CAMERA_WIDTH", "1280"))

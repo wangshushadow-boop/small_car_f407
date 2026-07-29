@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# bash /mnt/d/stm32/demo/small_car_f407/scripts/setup_wsl_ros_env.sh
+# bash /mnt/d/stm32/demo/smart_car/ros2_host/scripts/setup_wsl_ros_env.sh
 
 # 根据脚本位置定位项目，避免写死仓库所在盘符。
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd -- "${script_dir}/.." && pwd)"
 ros_setup="/opt/ros/kilted/setup.bash"
-fastdds_profile="${project_dir}/rpi_host/config/fastdds_wsl.xml"
+fastdds_profile="${project_dir}/config/fastdds_wsl.xml"
 
 # 加载 ROS2，并使用与树莓派相同的通信域。
 if [[ ! -f "${ros_setup}" ]]; then

@@ -16,7 +16,7 @@ small_car_base:
 
     # 串口写入失败时创建的恢复请求文件；
     # 宿主机 systemd.path 监控该文件并执行 USB 复位和容器重建。
-    mcu_recovery_request: /workspace/rpi_host/runtime/mcu_recovery.request
+    mcu_recovery_request: /workspace/ros2_host/runtime/mcu_recovery.request
 
     # 未融合轮式里程计使用的父坐标系名称。
     odom_frame: odom

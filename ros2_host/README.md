@@ -35,7 +35,7 @@
 ## 快速部署
 
 ```powershell
-.\ros2_host\scripts\sync_rpi_host.ps1
+.\ros2_host\scripts\sync_ros2_host.ps1
 ```
 
 脚本上传源码、运行宿主机测试，并重建和启动 ROS 2 容器。
