@@ -14,12 +14,14 @@ import time
 SYNC = b"\xaa\x55"
 VERSION = 3
 MSG_ENTER = 0x06
+MSG_INFO = 0x07
 MSG_HELLO = 0x10
 MSG_BEGIN = 0x11
 MSG_DATA = 0x12
 MSG_END = 0x13
 MSG_BOOT = 0x14
 MSG_ACK = 0x85
+MSG_INFO_VALUE = 0x89
 MSG_STATUS = 0x90
 DEV_KEY = b"small-car-ota-dev-key-v1-change!"
 
@@ -121,11 +123,52 @@ def expect_ack(response, request: int, accepted_offset=None):
         raise RuntimeError(f"MCU 拒绝请求 0x{request:02x}: 状态={payload[2]}, offset={offset}")
 
 
+def decode_application_info(response):
+    message, payload = response
+    if message != MSG_INFO_VALUE or len(payload) != 16:
+        raise RuntimeError(f"固件信息响应格式错误: msg=0x{message:02x}, payload={payload.hex()}")
+    return {
+        "valid": payload[0] == 1,
+        "version": struct.unpack_from("<I", payload, 4)[0],
+        "size": struct.unpack_from("<I", payload, 8)[0],
+        "crc32": struct.unpack_from("<I", payload, 12)[0],
+    }
+
+
+def decode_bootloader_status(response):
+    message, payload = response
+    if message != MSG_STATUS:
+        raise RuntimeError(f"Bootloader 状态响应错误: msg=0x{message:02x}")
+    # 旧 Bootloader 的状态负载只有 9 字节，不包含当前固件信息。
+    if len(payload) < 20:
+        return None
+    return {
+        "valid": payload[1] == 1,
+        "version": struct.unpack_from("<I", payload, 12)[0],
+        "size": struct.unpack_from("<I", payload, 16)[0],
+        "crc32": None,
+    }
+
+
+def print_firmware_info(info, source: str):
+    if info is None:
+        print(f"{source} 未提供当前固件版本（需要更新 Bootloader）")
+    elif not info["valid"]:
+        print(f"{source} 未检测到有效 App")
+    else:
+        crc = "" if info["crc32"] is None else f", CRC32=0x{info['crc32']:08X}"
+        print(f"当前固件版本: {info['version']}（来源: {source}, 大小: {info['size']} 字节{crc}）")
+
+
+def query_application_info(link: SerialLink, sequence: int = 1):
+    return decode_application_info(link.exchange(MSG_INFO, sequence, timeout=1.0))
+
+
 def enter_bootloader(link: SerialLink):
     try:
         response = link.exchange(MSG_HELLO, 1, timeout=0.8)
         if response[0] == MSG_STATUS:
-            return
+            return response
     except TimeoutError:
         pass
 
@@ -139,7 +182,7 @@ def enter_bootloader(link: SerialLink):
         try:
             response = link.exchange(MSG_HELLO, 16 + attempt, timeout=0.6)
             if response[0] == MSG_STATUS:
-                return
+                return response
         except TimeoutError:
             pass
     raise RuntimeError("应用已复位，但未检测到 Bootloader")
@@ -178,11 +221,33 @@ def update(link: SerialLink, image: bytes, version: int, key: bytes):
 
 def main():
     parser = argparse.ArgumentParser(description="small_car_f407 MCU OTA 升级")
-    parser.add_argument("firmware", help="small_car_f407.bin 路径")
+    parser.add_argument("firmware", nargs="?", help="small_car_f407.bin 路径")
     parser.add_argument("--device", default="/dev/small_car_mcu", help="USART3 串口设备")
-    parser.add_argument("--version", type=int, required=True, help="单调递增的固件版本号")
+    parser.add_argument("--version", type=int, help="写入 OTA 元数据的版本号（允许重复）")
     parser.add_argument("--key-file", help="32 字节 HMAC 密钥文件；未指定时使用开发密钥")
+    parser.add_argument("--status", action="store_true", help="只通过串口查询当前固件版本")
     args = parser.parse_args()
+
+    if args.status and (args.firmware is not None or args.version is not None):
+        parser.error("--status 不能与固件路径或 --version 同时使用")
+    if not args.status and (args.firmware is None or args.version is None):
+        parser.error("升级时必须提供固件路径和 --version")
+    if args.version is not None and not 0 <= args.version <= 0xFFFFFFFF:
+        parser.error("--version 必须在 0 到 4294967295 之间")
+
+    if args.status:
+        link = SerialLink(args.device)
+        try:
+            try:
+                print_firmware_info(query_application_info(link), "App 串口响应")
+            except TimeoutError:
+                print_firmware_info(
+                    decode_bootloader_status(link.exchange(MSG_HELLO, 2, timeout=1.0)),
+                    "Bootloader 串口响应",
+                )
+        finally:
+            link.close()
+        return
 
     image = open(args.firmware, "rb").read()
     key = open(args.key_file, "rb").read() if args.key_file else DEV_KEY
@@ -193,10 +258,22 @@ def main():
 
     link = SerialLink(args.device)
     try:
-        enter_bootloader(link)
+        current_info = None
+        try:
+            current_info = query_application_info(link)
+            print_firmware_info(current_info, "App 串口响应")
+        except TimeoutError:
+            pass
+        boot_status = enter_bootloader(link)
+        if current_info is None:
+            print_firmware_info(decode_bootloader_status(boot_status), "Bootloader 串口响应")
         print(f"Bootloader 已连接，开始写入 {len(image)} 字节")
         update(link, image, args.version, key)
-        print("升级完成，MCU 已启动新应用")
+        time.sleep(0.8)
+        try:
+            print_firmware_info(query_application_info(link, 240), "升级后 App 串口响应")
+        except TimeoutError:
+            print(f"升级完成，已写入版本 {args.version}；MCU 已启动新应用")
     finally:
         link.close()
 

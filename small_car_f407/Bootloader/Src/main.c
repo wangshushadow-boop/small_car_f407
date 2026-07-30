@@ -261,9 +261,13 @@ __attribute__((noreturn)) static void JumpToApplication(void)
 static void HandleFrame(uint8_t message, uint8_t sequence, const uint8_t *payload, uint8_t length)
 {
   if (message == MSG_OTA_HELLO) {
-    uint8_t status[9] = {1U};
-    WriteU32(&status[1], APP_LIMIT - APP_ADDRESS);
-    WriteU32(&status[5], g_next_offset);
+    const OtaMetadata *metadata = (const OtaMetadata *)METADATA_ADDRESS;
+    uint8_t status[20] = {1U};
+    status[1] = MetadataValid(metadata) ? 1U : 0U;
+    WriteU32(&status[4], APP_LIMIT - APP_ADDRESS);
+    WriteU32(&status[8], g_next_offset);
+    WriteU32(&status[12], metadata->version);
+    WriteU32(&status[16], metadata->image_size);
     SendFrame(MSG_OTA_STATUS, sequence, status, sizeof(status));
     return;
   }

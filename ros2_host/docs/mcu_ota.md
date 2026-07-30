@@ -75,7 +75,7 @@ cd ~/small_car_f407/ros2_host
 
 ## 日常升级
 
-先把 App 上传到树莓派，再使用递增的版本号升级：
+先把 App 上传到树莓派，再指定要写入元数据的版本号：
 
 ```bash
 scp small_car_f407.bin ubuntu@192.168.3.85:/tmp/
@@ -87,6 +87,23 @@ cd ~/small_car_f407/ros2_host
 脚本会停止 ROS 容器、释放 USART3、传输固件并重新启动容器。出现
 `启动 ACK 未返回，MCU 可能已切换到新应用` 属于复位时末尾 ACK 丢失；
 只要随后显示升级完成且 ROS 链路恢复，即表示升级成功。
+
+升级工具会在传输前通过 USART3 查询并打印当前固件版本，传输完成后再次查询。
+当前不限制版本号递增，允许重复使用同一版本号。
+
+只查询版本时，先释放被 ROS 容器占用的串口：
+
+```bash
+cd ~/small_car_f407/ros2_host/ros2
+docker compose down
+python3 ../tools/mcu_ota.py \
+  --status \
+  --device /dev/serial/by-id/usb-1a86_USB_Single_Serial_5C2C059301-if00
+docker compose up -d
+```
+
+查询直接复用 App 与树莓派之间的 USART3，不会进入 Bootloader、不会复位 MCU，
+也不需要切换到 USART1。
 
 `sync_ros2_host.ps1` 只部署 ROS 环境，不会烧录 Bootloader，也不会自动执行
 MCU OTA。

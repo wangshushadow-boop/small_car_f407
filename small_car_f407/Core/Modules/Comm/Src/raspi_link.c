@@ -39,12 +39,14 @@
 #define RASPI_MSG_PARAM 0x04U
 #define RASPI_MSG_TELEMETRY_CONFIG 0x05U
 #define RASPI_MSG_OTA_ENTER 0x06U
+#define RASPI_MSG_OTA_INFO 0x07U
 #define RASPI_MSG_CHASSIS_STATUS 0x81U
 #define RASPI_MSG_ENCODER_COUNTS 0x82U
 #define RASPI_MSG_IMU_RAW 0x83U
 #define RASPI_MSG_DEVICE_STATUS 0x84U
 #define RASPI_MSG_ACK 0x85U
 #define RASPI_MSG_PARAM_VALUE 0x88U
+#define RASPI_MSG_OTA_INFO_VALUE 0x89U
 
 #define RASPI_PARAM_OP_SET 1U
 #define RASPI_PARAM_OP_GET 2U
@@ -99,6 +101,7 @@ static void HandleControlCommand(uint8_t seq, const uint8_t *payload, uint8_t le
 static void HandleServoCommand(uint8_t seq, const uint8_t *payload, uint8_t length);
 static void HandleParamCommand(uint8_t seq, const uint8_t *payload, uint8_t length);
 static void SendFrame(uint8_t msg, const uint8_t *payload, uint8_t length);
+static void SendFrameWithSequence(uint8_t msg, uint8_t seq, const uint8_t *payload, uint8_t length);
 static void SendAck(uint8_t ack_msg, uint8_t ack_seq, uint8_t result);
 static uint16_t Crc16CcittFalse(const uint8_t *data, uint16_t length);
 static uint16_t ReadU16Le(const uint8_t *data);
@@ -416,6 +419,24 @@ static void HandleFrame(uint8_t msg, uint8_t seq, const uint8_t *payload, uint8_
       __DSB();
       NVIC_SystemReset();
       break;
+    case RASPI_MSG_OTA_INFO:
+      if (length != 0U)
+      {
+        SendAck(msg, seq, RASPI_ACK_LEN_ERROR);
+        break;
+      }
+      {
+        uint8_t info[16] = {0};
+        const uint32_t magic = OtaBoot_ReadMetadataWord(OTA_METADATA_MAGIC_OFFSET);
+        const uint32_t image_size = OtaBoot_ReadMetadataWord(OTA_METADATA_SIZE_OFFSET);
+        info[0] = (magic == OTA_METADATA_MAGIC) && (image_size > 0U) &&
+                  (image_size <= (OTA_APPLICATION_LIMIT - OTA_APPLICATION_ADDRESS));
+        WriteU32Le(&info[4], OtaBoot_ReadMetadataWord(OTA_METADATA_VERSION_OFFSET));
+        WriteU32Le(&info[8], image_size);
+        WriteU32Le(&info[12], OtaBoot_ReadMetadataWord(OTA_METADATA_CRC32_OFFSET));
+        SendFrameWithSequence(RASPI_MSG_OTA_INFO_VALUE, seq, info, sizeof(info));
+      }
+      break;
     default:
       SendAck(msg, seq, RASPI_ACK_UNSUPPORTED);
       break;
@@ -517,6 +538,11 @@ static void HandleParamCommand(uint8_t seq, const uint8_t *payload, uint8_t leng
 
 static void SendFrame(uint8_t msg, const uint8_t *payload, uint8_t length)
 {
+  SendFrameWithSequence(msg, g_tx_seq++, payload, length);
+}
+
+static void SendFrameWithSequence(uint8_t msg, uint8_t seq, const uint8_t *payload, uint8_t length)
+{
   if ((length > RASPI_PAYLOAD_MAX_SIZE) ||
       ((payload == NULL) && (length > 0U)))
   {
@@ -529,7 +555,7 @@ static void SendFrame(uint8_t msg, const uint8_t *payload, uint8_t length)
   frame[index++] = RASPI_FRAME_SYNC_1;
   frame[index++] = RASPI_FRAME_VERSION;
   frame[index++] = msg;
-  frame[index++] = g_tx_seq++;
+  frame[index++] = seq;
   frame[index++] = length;
   if (length > 0U)
   {

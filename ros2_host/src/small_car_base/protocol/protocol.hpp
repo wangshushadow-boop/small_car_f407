@@ -34,12 +34,14 @@ enum class Msg : std::uint8_t {
   kParam = 0x04,
   kTelemetryConfig = 0x05,
   kOtaEnter = 0x06,
+  kOtaInfo = 0x07,
   kChassisStatus = 0x81,
   kEncoderCounts = 0x82,
   kImuRaw = 0x83,
   kDeviceStatus = 0x84,
   kAck = 0x85,
   kParamValue = 0x88,
+  kOtaInfoValue = 0x89,
 };
 
 /** MCU 周期遥测开关位，可组合后通过 kTelemetryConfig 下发。 */
