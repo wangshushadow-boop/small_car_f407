@@ -17,8 +17,10 @@
 #include <string.h>
 
 #include "debug_uart.h"
+#include "chassis.h"
 #include "chassis_params.h"
 #include "main.h"
+#include "ota_boot.h"
 #include "servo.h"
 #include "usart.h"
 
@@ -36,6 +38,7 @@
 #define RASPI_MSG_HEARTBEAT 0x03U
 #define RASPI_MSG_PARAM 0x04U
 #define RASPI_MSG_TELEMETRY_CONFIG 0x05U
+#define RASPI_MSG_OTA_ENTER 0x06U
 #define RASPI_MSG_CHASSIS_STATUS 0x81U
 #define RASPI_MSG_ENCODER_COUNTS 0x82U
 #define RASPI_MSG_IMU_RAW 0x83U
@@ -399,6 +402,19 @@ static void HandleFrame(uint8_t msg, uint8_t seq, const uint8_t *payload, uint8_
         g_telemetry_mask = ReadU16Le(payload);
         SendAck(msg, seq, RASPI_ACK_OK);
       }
+      break;
+    case RASPI_MSG_OTA_ENTER:
+      if (length != 0U)
+      {
+        SendAck(msg, seq, RASPI_ACK_LEN_ERROR);
+        break;
+      }
+      Chassis_Stop();
+      SendAck(msg, seq, RASPI_ACK_OK);
+      HAL_Delay(20U);
+      *OtaBoot_RequestWord() = OTA_BOOT_REQUEST_MAGIC;
+      __DSB();
+      NVIC_SystemReset();
       break;
     default:
       SendAck(msg, seq, RASPI_ACK_UNSUPPORTED);

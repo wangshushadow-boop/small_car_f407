@@ -33,6 +33,7 @@ enum class Msg : std::uint8_t {
   kHeartbeat = 0x03,
   kParam = 0x04,
   kTelemetryConfig = 0x05,
+  kOtaEnter = 0x06,
   kChassisStatus = 0x81,
   kEncoderCounts = 0x82,
   kImuRaw = 0x83,

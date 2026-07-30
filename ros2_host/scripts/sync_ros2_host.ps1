@@ -78,6 +78,7 @@ try {
     "cmake --build '$RemoteProject/build-host' -j4",
     "ctest --test-dir '$RemoteProject/build-host' --output-on-failure",
     "chmod +x '$RemoteProject/tools/recover_mcu_usb.sh'",
+    "chmod +x '$RemoteProject/tools/mcu_ota.py' '$RemoteProject/scripts/update_mcu_firmware.sh'",
     "cd '$RemoteProject/ros2'",
     "docker compose up --build -d --force-recreate",
     "docker compose ps"
