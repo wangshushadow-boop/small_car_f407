@@ -37,6 +37,17 @@ int main() {
   Expect(command.velocity.linear_mps == 0.0,
          "obstacle stop must zero linear velocity");
 
+  safety.SetLimits(0.3, 1.0);
+  safety.SetFrontStopDistance(0.05);
+  safety.SetCommand({0.8, -2.0}, start + 30ms);
+  command = safety.Evaluate(start + 40ms);
+  Expect(command.state == small_car::CommandState::kActive,
+         "updated stop distance must take effect");
+  Expect(std::abs(command.velocity.linear_mps - 0.3) < 1e-9,
+         "updated linear limit must take effect");
+  Expect(std::abs(command.velocity.angular_rad_s + 1.0) < 1e-9,
+         "updated angular limit must take effect");
+
   command = safety.Evaluate(start + 600ms);
   Expect(command.state == small_car::CommandState::kTimedOut,
          "expired command must request one stop");

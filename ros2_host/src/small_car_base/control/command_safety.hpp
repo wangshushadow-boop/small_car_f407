@@ -34,6 +34,8 @@ class CommandSafety {
 
   void SetCommand(const VelocityCommand& command,
                   std::chrono::steady_clock::time_point received_at);
+  void SetLimits(double max_linear_mps, double max_angular_rad_s);
+  void SetFrontStopDistance(double front_stop_distance_m);
   void SetFrontRange(double range_m, bool valid);
   SafeCommand Evaluate(std::chrono::steady_clock::time_point now);
 

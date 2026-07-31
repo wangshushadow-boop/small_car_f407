@@ -39,9 +39,14 @@ int main(int argc, char** argv) {
   Expect(wheel_pwm->value == 550, "wheel_pwm_min parameter value mismatch");
   Expect(small_car::IsRuntimeTunableChassisParameter("wheel_pwm_min"),
          "wheel_pwm_min must be runtime tunable");
-  Expect(!small_car::IsRuntimeTunableChassisParameter(
+  Expect(small_car::IsRuntimeTunableChassisParameter(
              "odom_mm_per_tick_num"),
-         "odometry calibration must not be runtime tunable");
+         "odometry calibration must be runtime tunable");
+  Expect(small_car::IsRuntimeTunableChassisParameter("wheel_track_mm"),
+         "wheel track calibration must be runtime tunable");
+  Expect(small_car::IsRuntimeTunableChassisParameter(
+             "gyro_lsb_per_dps_x10"),
+         "IMU scale calibration must be runtime tunable");
   Expect(!small_car::IsRuntimeTunableChassisParameter("unknown_parameter"),
          "unknown parameter must not be runtime tunable");
 

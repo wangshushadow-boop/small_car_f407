@@ -170,6 +170,10 @@ class SmallCarBaseNode : public rclcpp::Node {
         static_cast<double>(small_car::ChassisParameterValue(
             chassis_parameters_, "wheel_track_mm")) /
         1000.0;
+    gyro_lsb_per_dps_ =
+        static_cast<double>(small_car::ChassisParameterValue(
+            chassis_parameters_, "gyro_lsb_per_dps_x10")) /
+        10.0;
     cmd_vel_timeout_ =
         std::chrono::milliseconds(get_parameter("cmd_vel_timeout_ms").as_int());
     command_rate_hz_ = get_parameter("command_rate_hz").as_double();
@@ -200,7 +204,7 @@ class SmallCarBaseNode : public rclcpp::Node {
     }
   }
 
-  /** 从 chassis.yaml 注册允许在线调整的闭环和轮侧参数。 */
+  /** 从 chassis.yaml 注册全部可在线标定的底盘参数。 */
   void DeclareRuntimeChassisParameters() {
     for (auto& parameter : chassis_parameters_) {
       if (!small_car::IsRuntimeTunableChassisParameter(parameter.name)) {
@@ -491,9 +495,33 @@ class SmallCarBaseNode : public rclcpp::Node {
         break;
       }
     }
+    ApplyHostChassisParameter(parameter->name, actual);
     RCLCPP_INFO(get_logger(), "runtime chassis parameter applied: %s=%d",
                 parameter->name.c_str(), actual);
     return result;
+  }
+
+  /** 同步刷新上位机参与单位换算和安全限幅的底盘参数。 */
+  void ApplyHostChassisParameter(const std::string& name, std::int32_t value) {
+    if (name == "odom_mm_per_tick_num") {
+      millimeters_per_tick_ =
+          static_cast<double>(value) / kEncoderMillimeterDenominator;
+    } else if (name == "wheel_track_mm") {
+      wheel_track_m_ = static_cast<double>(value) / 1000.0;
+    } else if (name == "gyro_lsb_per_dps_x10") {
+      gyro_lsb_per_dps_ = static_cast<double>(value) / 10.0;
+    } else if (name == "ultra_near_distance_mm") {
+      front_stop_distance_m_ = static_cast<double>(value) / 1000.0;
+      command_safety_->SetFrontStopDistance(front_stop_distance_m_);
+    } else if (name == "max_linear_speed_mm_s") {
+      max_linear_speed_mps_ = static_cast<double>(value) / 1000.0;
+      command_safety_->SetLimits(max_linear_speed_mps_,
+                                 max_angular_speed_rad_s_);
+    } else if (name == "max_angular_speed_mrad_s") {
+      max_angular_speed_rad_s_ = static_cast<double>(value) / 1000.0;
+      command_safety_->SetLimits(max_linear_speed_mps_,
+                                 max_angular_speed_rad_s_);
+    }
   }
 
   /** 高频串口轮询入口；每次轮询后尝试发布所有已经更新的消息类型。 */
@@ -605,9 +633,9 @@ class SmallCarBaseNode : public rclcpp::Node {
     raw.linear_acceleration.x = value->ax / 2048.0 * kGravity;
     raw.linear_acceleration.y = value->ay / 2048.0 * kGravity;
     raw.linear_acceleration.z = value->az / 2048.0 * kGravity;
-    raw.angular_velocity.x = value->gx / 16.4 * kDegreesToRadians;
-    raw.angular_velocity.y = value->gy / 16.4 * kDegreesToRadians;
-    raw.angular_velocity.z = value->gz / 16.4 * kDegreesToRadians;
+    raw.angular_velocity.x = value->gx / gyro_lsb_per_dps_ * kDegreesToRadians;
+    raw.angular_velocity.y = value->gy / gyro_lsb_per_dps_ * kDegreesToRadians;
+    raw.angular_velocity.z = value->gz / gyro_lsb_per_dps_ * kDegreesToRadians;
     for (const std::size_t index : {0U, 4U, 8U}) {
       raw.linear_acceleration_covariance[index] = imu_acceleration_variance_;
       raw.angular_velocity_covariance[index] = imu_angular_velocity_variance_;
@@ -730,6 +758,7 @@ class SmallCarBaseNode : public rclcpp::Node {
   double front_stop_distance_m_ = 0.2;
   double millimeters_per_tick_ = 0.0;
   double wheel_track_m_ = 0.115;
+  double gyro_lsb_per_dps_ = 16.4;
   double wheel_radius_m_ = 0.0325;
   double ultra_min_m_ = 0.02;
   double ultra_max_m_ = 4.0;

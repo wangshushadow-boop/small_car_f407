@@ -25,6 +25,21 @@ void CommandSafety::SetCommand(
   timeout_reported_ = false;
 }
 
+void CommandSafety::SetLimits(double max_linear_mps,
+                              double max_angular_rad_s) {
+  max_linear_mps_ = max_linear_mps;
+  max_angular_rad_s_ = max_angular_rad_s;
+  command_.linear_mps =
+      std::clamp(command_.linear_mps, -max_linear_mps_, max_linear_mps_);
+  command_.angular_rad_s =
+      std::clamp(command_.angular_rad_s, -max_angular_rad_s_,
+                 max_angular_rad_s_);
+}
+
+void CommandSafety::SetFrontStopDistance(double front_stop_distance_m) {
+  front_stop_distance_m_ = front_stop_distance_m;
+}
+
 void CommandSafety::SetFrontRange(double range_m, bool valid) {
   front_range_m_ = range_m;
   front_range_valid_ = valid;

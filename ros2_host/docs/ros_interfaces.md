@@ -32,11 +32,16 @@
 
 ## 在线参数
 
-允许在线调整轮速闭环、加速度限制、最小 PWM 和左右轮补偿。例如：
+`chassis.yaml` 中的 23 项底盘参数均允许在线调整，包括编码器比例、轮距、
+IMU 标定、手柄区间、速度限制、轮速闭环、最小 PWM 和左右轮补偿。例如：
 
 ```bash
 ros2 param get /small_car_base wheel_pwm_min
 ros2 param set /small_car_base wheel_pwm_min 550
+ros2 param set /small_car_base odom_mm_per_tick_num 2513
+ros2 param set /small_car_base wheel_track_mm 115
 ```
 
-节点校验参数并写入 MCU，回读一致后才返回成功。在线修改不会写回 `config/chassis.yaml`。
+每次只能修改一项。节点校验参数并写入 MCU，回读一致后才返回成功；涉及里程计、
+IMU 换算和安全限幅的参数也会立即更新上位机计算。在线修改不会写回
+`config/chassis.yaml`，确认标定结果后必须手动同步到 YAML。
