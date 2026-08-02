@@ -96,6 +96,27 @@ ros2 topic info /cmd_vel --verbose
 脚本通过单播固定发现 `192.168.3.85`，减少 WSL 多播发现延迟。PC 地址变化后同步修改
 `config/fastdds_wsl.xml`；若 WSL 只有 `lo` 接口，在 PowerShell 执行 `wsl --shutdown`。
 
+跨机发送 `TwistStamped` 前还要保证 WSL 与树莓派时钟同步。若话题可见但控制偶发无效，
+在 PowerShell 检查 WSL 时间是否落在两次 Windows 时间之间：
+
+```powershell
+[DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+wsl date +%s%3N
+[DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+```
+
+若不在该范围内，执行 `wsl --shutdown`，重新打开 WSL 后再次运行环境脚本。
+
+WSL 适合运行 `rqt`、RViz 和话题观察。底盘运动测试应通过 SSH 在树莓派容器内启动，
+避免 WSL 临时 DDS 发布器虽然显示匹配、数据却未被已有 Nav2 订阅器处理：
+
+```bash
+ssh ubuntu@192.168.3.85 \
+  "cd ~/small_car_f407/ros2_host && docker compose -f ros2/compose.yaml exec -T small_car_ros2 \
+  python3 /workspace/ros2_host/scripts/trace_velocity_chain.py \
+  --linear -0.20 --duration 2 --confirm-safe-test"
+```
+
 ## Hermes 语音
 
 ```bash

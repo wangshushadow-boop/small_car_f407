@@ -19,7 +19,7 @@ export ROS_DOMAIN_ID=0
 # 允许发现同一局域网中的树莓派，关闭仅本机通信限制。
 export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 unset ROS_LOCALHOST_ONLY
-unset ROS_STATIC_PEERS
+export ROS_STATIC_PEERS=192.168.3.85
 
 # 固定 Fast DDS 使用电脑的局域网接口。
 if [[ ! -f "${fastdds_profile}" ]]; then

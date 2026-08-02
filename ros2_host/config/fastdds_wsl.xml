@@ -9,6 +9,8 @@
       <transport_descriptor>
         <transport_id>wsl_lan_udp</transport_id>
         <type>UDPv4</type>
+        <!-- 覆盖树莓派上多个 ROS 进程可能使用的参与者端口。 -->
+        <maxInitialPeersRange>32</maxInitialPeersRange>
         <interfaceWhiteList>
           <address>192.168.3.61</address>
         </interfaceWhiteList>
@@ -21,6 +23,16 @@
         <userTransports>
           <transport_id>wsl_lan_udp</transport_id>
         </userTransports>
+        <!-- 主动向树莓派发送单播发现报文，避免依赖 WSL 多播发现时延。 -->
+        <builtin>
+          <initialPeersList>
+            <locator>
+              <udpv4>
+                <address>192.168.3.85</address>
+              </udpv4>
+            </locator>
+          </initialPeersList>
+        </builtin>
       </rtps>
     </participant>
   </profiles>
