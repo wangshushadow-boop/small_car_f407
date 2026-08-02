@@ -27,6 +27,7 @@
 - [日常运维](operations.md)
 - [架构与数据流](docs/architecture.md)
 - [ROS 2 接口](docs/ros_interfaces.md)
+- [小车底盘标定](docs/chassis_calibration.md)
 - [Nav2 配置](docs/nav2_integration.md)
 - [模块边界](docs/modules.md)
 - [硬件连接](hardware.md)

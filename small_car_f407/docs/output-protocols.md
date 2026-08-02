@@ -213,6 +213,7 @@ AA 55 | VER | MSG | SEQ | LEN | PAYLOAD... | CRC16
 | 参数ID `param_id` | `21` | `WHEEL_PWM_MIN` | 电机克服静摩擦所需的最低有效 PWM |
 | 参数ID `param_id` | `22` | `WHEEL_LEFT_OUTPUT_PERMILLE` | 左侧电机输出补偿，1000 表示不缩放 |
 | 参数ID `param_id` | `23` | `WHEEL_RIGHT_OUTPUT_PERMILLE` | 右侧电机输出补偿，1000 表示不缩放 |
+| 参数ID `param_id` | `24` | `WHEEL_TURN_START_PWM` | 原地转向起步 PWM，短时保持后恢复普通最低 PWM |
 | ACK结果 `result` | `0` | `OK` | 命令处理成功 |
 | ACK结果 `result` | `1` | `CRC_ERROR` | CRC错误 |
 | ACK结果 `result` | `2` | `LEN_ERROR` | 长度错误 |

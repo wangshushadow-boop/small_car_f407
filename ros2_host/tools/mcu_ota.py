@@ -46,6 +46,7 @@ def frame(message: int, sequence: int, payload: bytes = b"") -> bytes:
 
 class SerialLink:
     def __init__(self, path: str):
+        self.path = path
         self.fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         attrs = termios.tcgetattr(self.fd)
         attrs[0] = attrs[0] & ~(termios.IGNBRK | termios.BRKINT | termios.PARMRK | termios.ISTRIP |
@@ -64,6 +65,11 @@ class SerialLink:
     def close(self):
         termios.tcflush(self.fd, termios.TCIOFLUSH)
         os.close(self.fd)
+
+    def reopen(self):
+        self.close()
+        time.sleep(0.5)
+        self.__init__(self.path)
 
     def exchange(self, message: int, sequence: int, payload: bytes = b"", timeout: float = 2.0):
         deadline = time.monotonic() + timeout
@@ -165,25 +171,42 @@ def query_application_info(link: SerialLink, sequence: int = 1):
 
 
 def enter_bootloader(link: SerialLink):
+    sequence = int(time.monotonic_ns() // 1_000_000) & 0xFF
+    # 与状态查询保持相同的同步顺序：先发 INFO，再用新序号发 HELLO。
     try:
-        response = link.exchange(MSG_HELLO, 1, timeout=0.8)
+        link.exchange(MSG_INFO, sequence, timeout=0.8)
+    except (TimeoutError, RuntimeError):
+        pass
+    try:
+        sequence = (sequence + 1) & 0xFF
+        response = link.exchange(MSG_HELLO, sequence, timeout=0.8)
         if response[0] == MSG_STATUS:
             return response
-    except TimeoutError:
+    except (TimeoutError, RuntimeError):
         pass
 
-    for attempt in range(5):
+    try:
+        sequence = (sequence + 1) & 0xFF
+        expect_ack(link.exchange(MSG_ENTER, sequence, timeout=0.8), MSG_ENTER)
+    except (TimeoutError, RuntimeError):
+        # MCU 复位时末尾 ACK 可能丢失，后续只用 HELLO 判断实际状态。
+        pass
+
+    # MCU 复位后重新打开 tty，丢弃 App 阶段的串口状态和残留数据。
+    link.reopen()
+    for attempt in range(10):
+        time.sleep(0.5)
         try:
-            expect_ack(link.exchange(MSG_ENTER, 2 + attempt, timeout=0.8), MSG_ENTER)
+            sequence = (sequence + 1) & 0xFF
+            link.exchange(MSG_INFO, sequence, timeout=0.8)
         except (TimeoutError, RuntimeError):
-            # USB 串口复位可能让应用 ACK 丢失，继续用 HELLO 判断实际状态。
             pass
-        time.sleep(0.3)
         try:
-            response = link.exchange(MSG_HELLO, 16 + attempt, timeout=0.6)
+            sequence = (sequence + 1) & 0xFF
+            response = link.exchange(MSG_HELLO, sequence, timeout=0.8)
             if response[0] == MSG_STATUS:
                 return response
-        except TimeoutError:
+        except (TimeoutError, RuntimeError):
             pass
     raise RuntimeError("应用已复位，但未检测到 Bootloader")
 
@@ -192,7 +215,7 @@ def update(link: SerialLink, image: bytes, version: int, key: bytes):
     image_crc = binascii.crc32(image) & 0xFFFFFFFF
     manifest = struct.pack("<III", len(image), version, image_crc)
     signature = hmac.new(key, manifest + image, hashlib.sha256).digest()
-    sequence = 10
+    sequence = int(time.monotonic_ns() // 1_000_000) & 0xFF
     expect_ack(link.exchange(MSG_BEGIN, sequence, manifest + signature, timeout=15.0), MSG_BEGIN)
     for offset in range(0, len(image), 60):
         sequence = (sequence + 1) & 0xFF
@@ -226,10 +249,14 @@ def main():
     parser.add_argument("--version", type=int, help="写入 OTA 元数据的版本号（允许重复）")
     parser.add_argument("--key-file", help="32 字节 HMAC 密钥文件；未指定时使用开发密钥")
     parser.add_argument("--status", action="store_true", help="只通过串口查询当前固件版本")
+    parser.add_argument("--bootloader-ready", action="store_true",
+                        help="已确认处于 Bootloader 时跳过复位握手")
     args = parser.parse_args()
 
     if args.status and (args.firmware is not None or args.version is not None):
         parser.error("--status 不能与固件路径或 --version 同时使用")
+    if args.status and args.bootloader_ready:
+        parser.error("--status 不能与 --bootloader-ready 同时使用")
     if not args.status and (args.firmware is None or args.version is None):
         parser.error("升级时必须提供固件路径和 --version")
     if args.version is not None and not 0 <= args.version <= 0xFFFFFFFF:
@@ -240,7 +267,7 @@ def main():
         try:
             try:
                 print_firmware_info(query_application_info(link), "App 串口响应")
-            except TimeoutError:
+            except (TimeoutError, RuntimeError):
                 print_firmware_info(
                     decode_bootloader_status(link.exchange(MSG_HELLO, 2, timeout=1.0)),
                     "Bootloader 串口响应",
@@ -258,14 +285,8 @@ def main():
 
     link = SerialLink(args.device)
     try:
-        current_info = None
-        try:
-            current_info = query_application_info(link)
-            print_firmware_info(current_info, "App 串口响应")
-        except TimeoutError:
-            pass
-        boot_status = enter_bootloader(link)
-        if current_info is None:
+        if not args.bootloader_ready:
+            boot_status = enter_bootloader(link)
             print_firmware_info(decode_bootloader_status(boot_status), "Bootloader 串口响应")
         print(f"Bootloader 已连接，开始写入 {len(image)} 字节")
         update(link, image, args.version, key)

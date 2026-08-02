@@ -26,6 +26,7 @@
 #define WHEEL_MOTOR_B_SIGN 1
 #define WHEEL_MOTOR_C_SIGN -1
 #define WHEEL_MOTOR_D_SIGN -1
+#define WHEEL_TURN_START_BOOST_MS 250U
 
 typedef struct {
   /* 上位机/运动控制器请求的最终轮侧速度，单位为 mm/s。 */
@@ -34,6 +35,8 @@ typedef struct {
   int16_t ramped_target_mm_s;
   /* 误差积分保存为 (mm/s)*ms，避免 20 ms 周期下的小误差被整数除法丢失。 */
   int32_t integral_mm_s_ms;
+  /* 原地转向起步 PWM 的剩余保持时间，单位 ms。 */
+  uint16_t turn_start_boost_remaining_ms;
 } WheelControllerState;
 
 static WheelControllerState g_left;
@@ -121,6 +124,7 @@ static int16_t EncoderDeltaToSpeed(int16_t first_delta,
 static int16_t ApplyPi(WheelControllerState *state,
                        int16_t measured_mm_s,
                        int16_t output_scale_permille,
+                       int16_t minimum_pwm,
                        uint32_t dt_ms,
                        const ChassisParams *params)
 {
@@ -161,13 +165,13 @@ static int16_t ApplyPi(WheelControllerState *state,
     output = ClampI16(output, -MOTOR_MAX_SPEED, 0);
   }
 
-  if ((output > 0) && (output < params->wheel_pwm_min))
+  if ((output > 0) && (output < minimum_pwm))
   {
-    output = params->wheel_pwm_min;
+    output = minimum_pwm;
   }
-  else if ((output < 0) && (output > -params->wheel_pwm_min))
+  else if ((output < 0) && (output > -minimum_pwm))
   {
-    output = -params->wheel_pwm_min;
+    output = -minimum_pwm;
   }
   return ClampI16(output, -MOTOR_MAX_SPEED, MOTOR_MAX_SPEED);
 }
@@ -192,11 +196,13 @@ void WheelSpeedController_SetTarget(int16_t left_mm_s, int16_t right_mm_s)
       ((left_target > 0) != (g_left.target_mm_s > 0)))
   {
     g_left.integral_mm_s_ms = 0;
+    g_left.turn_start_boost_remaining_ms = 0U;
   }
   if ((right_target == 0) ||
       ((right_target > 0) != (g_right.target_mm_s > 0)))
   {
     g_right.integral_mm_s_ms = 0;
+    g_right.turn_start_boost_remaining_ms = 0U;
   }
   g_left.target_mm_s = left_target;
   g_right.target_mm_s = right_target;
@@ -259,11 +265,66 @@ void WheelSpeedController_TaskStep(uint32_t dt_ms)
                           dt_ms,
                           &params);
 
+  /*
+   * 四轮差速底盘原地转向时需要克服轮胎侧向静摩擦。只在左右目标反向且
+   * 对应轮组尚未起转时使用较高起步 PWM；检测到运动后立即恢复普通最低
+   * PWM，避免低角速度命令被持续放大。
+   */
+  const bool counter_rotating =
+      ((g_left.ramped_target_mm_s < 0) && (g_right.ramped_target_mm_s > 0)) ||
+      ((g_left.ramped_target_mm_s > 0) && (g_right.ramped_target_mm_s < 0));
+  if (!counter_rotating)
+  {
+    g_left.turn_start_boost_remaining_ms = 0U;
+    g_right.turn_start_boost_remaining_ms = 0U;
+  }
+  else
+  {
+    if ((g_left.turn_start_boost_remaining_ms == 0U) &&
+        (left_measured >= -5) && (left_measured <= 5))
+    {
+      g_left.turn_start_boost_remaining_ms = WHEEL_TURN_START_BOOST_MS;
+    }
+    if ((g_right.turn_start_boost_remaining_ms == 0U) &&
+        (right_measured >= -5) && (right_measured <= 5))
+    {
+      g_right.turn_start_boost_remaining_ms = WHEEL_TURN_START_BOOST_MS;
+    }
+  }
+
+  const int16_t left_minimum_pwm =
+      (g_left.turn_start_boost_remaining_ms > 0U)
+          ? params.wheel_turn_start_pwm
+          : params.wheel_pwm_min;
+  const int16_t right_minimum_pwm =
+      (g_right.turn_start_boost_remaining_ms > 0U)
+          ? params.wheel_turn_start_pwm
+          : params.wheel_pwm_min;
+
+  if (g_left.turn_start_boost_remaining_ms > dt_ms)
+  {
+    g_left.turn_start_boost_remaining_ms -= (uint16_t)dt_ms;
+  }
+  else
+  {
+    g_left.turn_start_boost_remaining_ms = 0U;
+  }
+  if (g_right.turn_start_boost_remaining_ms > dt_ms)
+  {
+    g_right.turn_start_boost_remaining_ms -= (uint16_t)dt_ms;
+  }
+  else
+  {
+    g_right.turn_start_boost_remaining_ms = 0U;
+  }
+
   /* 同侧前后两个电机共享控制器输出。 */
   const int16_t left_output =
-      ApplyPi(&g_left, left_measured, params.wheel_left_output_permille, dt_ms, &params);
+      ApplyPi(&g_left, left_measured, params.wheel_left_output_permille,
+              left_minimum_pwm, dt_ms, &params);
   const int16_t right_output =
-      ApplyPi(&g_right, right_measured, params.wheel_right_output_permille, dt_ms, &params);
+      ApplyPi(&g_right, right_measured, params.wheel_right_output_permille,
+              right_minimum_pwm, dt_ms, &params);
   Motor_SetSpeed(MOTOR_A, left_output);
   Motor_SetSpeed(MOTOR_B, left_output);
   Motor_SetSpeed(MOTOR_C, right_output);

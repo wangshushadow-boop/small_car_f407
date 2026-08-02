@@ -5,7 +5,7 @@
 small_car:
   ros__parameters:
     # 参数 ID 1：里程计每个编码器计数对应毫米数的分子，分母固定为 15600。
-    odom_mm_per_tick_num: 2513
+    odom_mm_per_tick_num: 2166
 
     # 参数 ID 2：手柄前进方向开始驱动时的电机输出，范围 0-1000。
     gamepad_forward_start: 550
@@ -65,10 +65,13 @@ small_car:
     wheel_accel_limit_mm_s2: 500
 
     # 参数 ID 21：电机非零输出的最小 PWM，克服低速静摩擦。
-    wheel_pwm_min: 550
+    wheel_pwm_min: 580
 
     # 参数 ID 22：左侧电机输出修正，1000 表示 100%。
     wheel_left_output_permille: 1000
 
     # 参数 ID 23：右侧电机输出修正，1000 表示 100%。
     wheel_right_output_permille: 1000
+
+    # 参数 ID 24：原地转向起步 PWM；触发后短时保持，再恢复 wheel_pwm_min。
+    wheel_turn_start_pwm: 750

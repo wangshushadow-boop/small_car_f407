@@ -33,7 +33,7 @@ struct ParameterDefinition {
   bool runtime_tunable;
 };
 
-constexpr std::array<ParameterDefinition, 23> kParameterDefinitions = {{
+constexpr std::array<ParameterDefinition, 24> kParameterDefinitions = {{
     {1, "odom_mm_per_tick_num", 1000, 5000, true},
     {2, "gamepad_forward_start", 0, 1000, true},
     {3, "gamepad_reverse_start", 0, 1000, true},
@@ -57,6 +57,7 @@ constexpr std::array<ParameterDefinition, 23> kParameterDefinitions = {{
     {21, "wheel_pwm_min", 0, 1000, true},
     {22, "wheel_left_output_permille", 500, 1500, true},
     {23, "wheel_right_output_permille", 500, 1500, true},
+    {24, "wheel_turn_start_pwm", 0, 1000, true},
 }};
 
 std::runtime_error ConfigError(const std::string& detail) {

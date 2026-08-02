@@ -51,11 +51,11 @@ small_car_base:
     # /wheel/odom_raw 中角速度协方差，单位 (rad/s)²。
     odom_angular_velocity_variance: 0.05
 
-    # /imu/data_raw 中三轴线加速度协方差，单位 (m/s²)²。
-    imu_acceleration_variance: 0.1
+    # /imu/data_raw 中三轴线加速度协方差，单位 (m/s²)²；取两轮静止采样的保守值。
+    imu_acceleration_variance: 0.018
 
-    # /imu/data_raw 中三轴角速度协方差，单位 (rad/s)²。
-    imu_angular_velocity_variance: 0.02
+    # /imu/data_raw 中三轴角速度协方差，单位 (rad/s)²；包含静止 Z 轴偏差。
+    imu_angular_velocity_variance: 0.003
 
     # 上云台关节处于 0 rad 时的舵机中心脉宽，单位 us。
     upper_servo_center_us: 1500

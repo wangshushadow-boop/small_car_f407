@@ -67,6 +67,7 @@ void ChassisParams_Init(void)
   g_params.wheel_speed_integral_limit = 1000;
   g_params.wheel_accel_limit_mm_s2 = 500;
   g_params.wheel_pwm_min = 550;
+  g_params.wheel_turn_start_pwm = 750;
   g_params.wheel_left_output_permille = 1000;
   g_params.wheel_right_output_permille = 1000;
 }
@@ -179,6 +180,10 @@ bool ChassisParams_Set(ChassisParamId id, int32_t value)
       g_params.wheel_right_output_permille = ClampI16Param(value, 500, 1500);
       return true;
 
+    case CHASSIS_PARAM_WHEEL_TURN_START_PWM:
+      g_params.wheel_turn_start_pwm = ClampI16Param(value, 0, 1000);
+      return true;
+
     default:
       return false;
   }
@@ -284,6 +289,10 @@ bool ChassisParams_GetValue(ChassisParamId id, int32_t *value)
 
     case CHASSIS_PARAM_WHEEL_RIGHT_OUTPUT_PERMILLE:
       *value = g_params.wheel_right_output_permille;
+      return true;
+
+    case CHASSIS_PARAM_WHEEL_TURN_START_PWM:
+      *value = g_params.wheel_turn_start_pwm;
       return true;
 
     default:

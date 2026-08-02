@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
   }
 
   const auto parameters = small_car::LoadChassisConfig(argv[1]);
-  Expect(parameters.size() == 23, "chassis parameter count mismatch");
+  Expect(parameters.size() == 24, "chassis parameter count mismatch");
   Expect(small_car::ChassisParameterValue(
              parameters, "max_linear_speed_mm_s") > 0,
          "linear speed limit must be positive");
@@ -39,6 +39,12 @@ int main(int argc, char** argv) {
   Expect(wheel_pwm->value == 550, "wheel_pwm_min parameter value mismatch");
   Expect(small_car::IsRuntimeTunableChassisParameter("wheel_pwm_min"),
          "wheel_pwm_min must be runtime tunable");
+  const auto turn_start_pwm = small_car::MakeChassisParameter(
+      "wheel_turn_start_pwm", 750, &validation_error);
+  Expect(turn_start_pwm.has_value(), "turn start PWM must be accepted");
+  Expect(turn_start_pwm->id == 24, "wheel_turn_start_pwm parameter id mismatch");
+  Expect(small_car::IsRuntimeTunableChassisParameter("wheel_turn_start_pwm"),
+         "wheel_turn_start_pwm must be runtime tunable");
   Expect(small_car::IsRuntimeTunableChassisParameter(
              "odom_mm_per_tick_num"),
          "odometry calibration must be runtime tunable");

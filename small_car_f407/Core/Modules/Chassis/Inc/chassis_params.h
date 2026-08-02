@@ -35,6 +35,7 @@ typedef enum {
   CHASSIS_PARAM_WHEEL_PWM_MIN = 21,
   CHASSIS_PARAM_WHEEL_LEFT_OUTPUT_PERMILLE = 22,
   CHASSIS_PARAM_WHEEL_RIGHT_OUTPUT_PERMILLE = 23,
+  CHASSIS_PARAM_WHEEL_TURN_START_PWM = 24,
 } ChassisParamId;
 
 /** 底盘当前运行参数快照；字段名同时对应树莓派 YAML 键名。 */
@@ -71,6 +72,8 @@ typedef struct {
   int16_t wheel_accel_limit_mm_s2;
   /** 克服电机静摩擦的最小归一化 PWM。 */
   int16_t wheel_pwm_min;
+  /** 左右轮反向且尚未起转时用于克服轮胎侧向静摩擦的 PWM。 */
+  int16_t wheel_turn_start_pwm;
   /** 左右侧输出修正比例，1000 表示不修正。 */
   int16_t wheel_left_output_permille;
   int16_t wheel_right_output_permille;

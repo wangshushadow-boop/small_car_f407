@@ -35,7 +35,7 @@ docker compose logs -f small_car_ros2
 正常日志包含：
 
 ```text
-applied and verified 23 chassis parameters
+applied and verified 24 chassis parameters
 small car base ready: /dev/small_car_mcu @ 115200
 Managed nodes are active
 ```

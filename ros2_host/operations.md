@@ -93,7 +93,8 @@ bash /mnt/d/stm32/demo/smart_car/ros2_host/scripts/setup_wsl_ros_env.sh
 ros2 topic info /cmd_vel --verbose
 ```
 
-PC 地址变化后同步修改 `config/fastdds_wsl.xml`；若 WSL 只有 `lo` 接口，在 PowerShell 执行 `wsl --shutdown`。
+脚本通过单播固定发现 `192.168.3.85`，减少 WSL 多播发现延迟。PC 地址变化后同步修改
+`config/fastdds_wsl.xml`；若 WSL 只有 `lo` 接口，在 PowerShell 执行 `wsl --shutdown`。
 
 ## Hermes 语音
 
