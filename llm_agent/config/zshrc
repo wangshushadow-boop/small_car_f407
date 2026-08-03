@@ -1,0 +1,51 @@
+# llm_agent 的基础 Zsh 配置。
+# 修改此模板后，可复制到 WSL 的 /home/llm_agent/.zshrc。
+
+# 历史记录：跨终端共享，并忽略重复命令和前导空格命令。
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=10000
+SAVEHIST=10000
+setopt append_history
+setopt inc_append_history
+setopt share_history
+setopt hist_ignore_all_dups
+setopt hist_ignore_space
+
+# 使用 Emacs 风格快捷键，并启用方向键历史搜索。
+bindkey -e
+autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
+zle -N up-line-or-beginning-search
+zle -N down-line-or-beginning-search
+bindkey '^[[A' up-line-or-beginning-search
+bindkey '^[[B' down-line-or-beginning-search
+
+# 启用 Zsh 原生补全系统。
+autoload -Uz compinit
+compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+
+# 常用别名。
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias grep='grep --color=auto'
+
+# 简洁提示符：用户@主机:当前目录。
+PROMPT='%F{cyan}%n@%m%f:%F{blue}%~%f %# '
+
+# fzf：Ctrl+R 搜索历史，Ctrl+T 搜索文件，Alt+C 进入目录。
+[[ -r /usr/share/doc/fzf/examples/key-bindings.zsh ]] && \
+  source /usr/share/doc/fzf/examples/key-bindings.zsh
+[[ -r /usr/share/doc/fzf/examples/completion.zsh ]] && \
+  source /usr/share/doc/fzf/examples/completion.zsh
+
+# 输入命令时显示灰色建议，按右方向键接受。
+[[ -r /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && \
+  source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
+
+# 语法高亮必须最后加载。
+[[ -r /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && \
+  source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
