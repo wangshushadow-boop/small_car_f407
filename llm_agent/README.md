@@ -158,3 +158,8 @@ llm_agent/
 
 不要把真实 API 密钥提交到 Git。后续可使用本地 `.env` 文件，并把它加入
 `.gitignore`。
+
+当前第一版事件入口已在 [agent](agent/README.md) 中实现：ROS 感知层发布
+`/car/agent/speech_finished`，这里的 Agent 运行层订阅事件并调用 LangGraph。
+
+已验证的语音对话启动、检查和排错步骤见[Agent 语音对话链路](docs/agent_ros_voice_loop.md)。

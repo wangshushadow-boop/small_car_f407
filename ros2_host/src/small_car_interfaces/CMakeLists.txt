@@ -4,10 +4,12 @@ project(small_car_interfaces)
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AudioFrame.msg"
-  DEPENDENCIES std_msgs
+  "msg/SpeechEvent.msg"
+  DEPENDENCIES std_msgs sensor_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

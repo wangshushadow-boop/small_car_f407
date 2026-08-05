@@ -53,5 +53,6 @@ exec env \
   --trust-remote-code \
   --served-model-name minicpm-o-4.5-awq \
   --max-num-batched-tokens 2048 \
+  --allowed-local-media-path /tmp \
   > >(tee "${LOG_DIR}/minicpm-o.stdout.log") \
   2> >(tee "${LOG_DIR}/minicpm-o.stderr.log" >&2)
