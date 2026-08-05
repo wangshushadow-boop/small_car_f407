@@ -28,6 +28,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-kilted-nav2-bringup \
       ros-kilted-robot-state-publisher \
       ros-kilted-robot-localization \
+      ros-kilted-rmw-cyclonedds-cpp \
+      ros-kilted-v4l2-camera \
+      ros-kilted-image-transport-plugins \
       ros-kilted-sensor-msgs \
       ros-kilted-std-msgs \
       ros-kilted-std-srvs \

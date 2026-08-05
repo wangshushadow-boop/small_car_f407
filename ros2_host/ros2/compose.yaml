@@ -20,7 +20,9 @@ services:
       PYTHONUNBUFFERED: "1"
       # 避免容器以 root 身份在挂载的源码目录生成无法删除的 __pycache__。
       PYTHONDONTWRITEBYTECODE: "1"
-      CAR_VOICE_INPUT_DEVICE: "0"
+      ROS_DOMAIN_ID: "0"
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      CAR_VOICE_INPUT_DEVICE: plughw:CARD=USB,DEV=0
       CAR_VOICE_PLAYBACK_DEVICE: plughw:CARD=USB,DEV=0
       CAR_VOICE_STT_PROVIDER: sensevoice
       CAR_VOICE_WAKE_ON_ANY_SPEECH: "false"
@@ -39,7 +41,8 @@ services:
       --install-base install-ros
       --symlink-install &&
       source install-ros/setup.bash &&
-      ros2 launch small_car_nav2 system.launch.py"
+      { ros2 launch small_car_av pi_av.launch.py &
+      exec ros2 launch small_car_nav2 system.launch.py; }"
     logging:
       driver: local
       options:

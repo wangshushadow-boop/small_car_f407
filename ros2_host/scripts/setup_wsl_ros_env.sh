@@ -1,46 +1,50 @@
 #!/usr/bin/env bash
+# 用途：进入可与树莓派通信的 ROS 2 Kilted 终端。
+# 使用：bash scripts/setup_wsl_ros_env.sh [树莓派IP]
+# 示例：bash scripts/setup_wsl_ros_env.sh 192.168.3.85
 
-# bash /mnt/d/stm32/demo/smart_car/ros2_host/scripts/setup_wsl_ros_env.sh
+set -euo pipefail
 
-# 根据脚本位置定位项目，避免写死仓库所在盘符。
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd -- "${script_dir}/.." && pwd)"
 ros_setup="/opt/ros/kilted/setup.bash"
-fastdds_profile="${project_dir}/config/fastdds_wsl.xml"
+workspace_setup="${project_dir}/install-ros/setup.bash"
+raspberry_pi_ip="${1:-${ROS_STATIC_PEERS:-}}"
 
-# 加载 ROS2，并使用与树莓派相同的通信域。
 if [[ ! -f "${ros_setup}" ]]; then
-  echo "错误：未找到 ROS2 环境 ${ros_setup}"
+  echo "错误：未找到 ROS 2 Kilted：${ros_setup}"
   exit 1
 fi
+
+set +u
 source "${ros_setup}"
-export ROS_DOMAIN_ID=0
+if [[ -f "${workspace_setup}" ]]; then
+  source "${workspace_setup}"
+fi
+set -u
 
-# 允许发现同一局域网中的树莓派，关闭仅本机通信限制。
-export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+export RMW_IMPLEMENTATION="rmw_cyclonedds_cpp"
+unset ROS_AUTOMATIC_DISCOVERY_RANGE
 unset ROS_LOCALHOST_ONLY
-export ROS_STATIC_PEERS=192.168.3.85
 
-# 固定 Fast DDS 使用电脑的局域网接口。
-if [[ ! -f "${fastdds_profile}" ]]; then
-  echo "错误：未找到 Fast DDS 配置 ${fastdds_profile}"
-  exit 1
+# mirrored networking 下优先使用局域网多播发现；静态 peer 用于无线网络
+# 禁止多播或发现不稳定时的单播补充。没有提供 IP 时不保留旧值。
+if [[ -n "${raspberry_pi_ip}" ]]; then
+  export ROS_STATIC_PEERS="${raspberry_pi_ip}"
+else
+  unset ROS_STATIC_PEERS
 fi
-export FASTDDS_DEFAULT_PROFILES_FILE="${fastdds_profile}"
 
-# 清理旧终端遗留的 ROS2 daemon，并使用当前 DDS 配置重新启动。
-# timeout 防止异常 daemon 再次让脚本长时间卡住。
 timeout 5 ros2 daemon stop >/dev/null 2>&1 || true
-if ! timeout 10 ros2 daemon start >/dev/null 2>&1; then
-  echo "错误：ROS2 daemon 启动失败，请在 PowerShell 执行 wsl --shutdown 后重试。"
-  exit 1
-fi
+timeout 10 ros2 daemon start >/dev/null 2>&1 || true
 
-# 给 DDS 留出短暂的局域网设备发现时间。
-sleep 2
+echo "ROS 2 Kilted 通信环境已加载。"
+echo "项目目录：${project_dir}"
+echo "ROS_DOMAIN_ID=${ROS_DOMAIN_ID}"
+echo "RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION}"
+echo "ROS_AUTOMATIC_DISCOVERY_RANGE=系统默认（局域网发现）"
+echo "ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-未设置，仅使用局域网发现}"
+echo "可以执行：ros2 topic list --no-daemon --spin-time 5"
 
-# 进入继承上述环境的交互终端。
-# 输入 exit 可退出该终端，返回执行脚本前的终端。
-echo "ROS2 环境和 daemon 配置完成。"
-echo "已进入 ROS2 终端，可执行 ros2 topic list 检查树莓派话题。"
-exec bash -i
+exec zsh -i

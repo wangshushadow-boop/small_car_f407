@@ -9,6 +9,8 @@
 | `src/small_car_base` | MCU 通信、底盘安全、ROS 接口与 EKF 配置 |
 | `src/small_car_description` | URDF、RViz 和固定 TF |
 | `src/small_car_nav2` | Nav2 参数与整机启动入口 |
+| `src/small_car_av` | 树莓派摄像头与 Jabra 麦克风采集 |
+| `src/small_car_interfaces` | 音频帧消息定义 |
 | `apps` | 无 ROS 依赖的诊断工具 |
 | `ros2` | Dockerfile 与 Compose |
 | `scripts` | WSL 环境和一键部署脚本 |
@@ -19,12 +21,29 @@
 - `small_car_base/launch/base.launch.py`：启动底盘节点、EKF 和机器人模型。
 - `small_car_nav2/launch/system.launch.py`：包含 `base.launch.py`，再启动 Nav2。
 
-容器默认执行 `ros2 launch small_car_nav2 system.launch.py`。
+容器启动 Nav2 时会同时启动真实音视频采集。当前对外使用的 topic 为：
+
+| Topic | 类型 | 来源 |
+| --- | --- | --- |
+| `/car/camera/image/compressed` | `sensor_msgs/msg/CompressedImage` | `/dev/video0` 摄像头 |
+| `/car/camera/camera_info` | `sensor_msgs/msg/CameraInfo` | 摄像头参数 |
+| `/car/audio/input` | `small_car_interfaces/msg/AudioFrame` | Jabra 麦克风 |
+
+## 音视频运行条件
+
+树莓派需将 `/dev/video0` 和 `/dev/snd` 映射进 ROS 容器；容器使用 host 网络、
+`ROS_DOMAIN_ID=0` 与 Cyclone DDS。WSL 订阅时使用相同的 Domain ID 和
+`RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`。录包示例：
+
+```bash
+ros2 bag record --topics /car/camera/image/compressed /car/camera/camera_info /car/audio/input
+```
 
 ## 文档
 
 - [部署与验收](docs/deployment.md)
-- [日常运维](operations.md)
+- [树莓派运维](operations.md)
+- [WSL 操作](docs/wsl_operations.md)
 - [架构与数据流](docs/architecture.md)
 - [ROS 2 接口](docs/ros_interfaces.md)
 - [小车底盘标定](docs/chassis_calibration.md)

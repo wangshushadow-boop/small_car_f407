@@ -31,6 +31,16 @@ alias la='ls -A'
 alias l='ls -CF'
 alias grep='grep --color=auto'
 
+# ROS 2 Kilted 基础环境。树莓派静态地址不在这里硬编码，使用
+# ros2_host/scripts/setup_wsl_ros_env.sh 按当前网络设置。
+if [[ -r /opt/ros/kilted/setup.zsh ]]; then
+  source /opt/ros/kilted/setup.zsh
+  export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+  export RMW_IMPLEMENTATION="rmw_cyclonedds_cpp"
+  unset ROS_AUTOMATIC_DISCOVERY_RANGE
+  unset ROS_LOCALHOST_ONLY
+fi
+
 # 简洁提示符：用户@主机:当前目录。
 PROMPT='%F{cyan}%n@%m%f:%F{blue}%~%f %# '
 
@@ -49,3 +59,11 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
 [[ -r /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && \
   source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
+# Windows Terminal 可能根据终端模式发送 CSI（Esc [）或 SS3（Esc O）方向键。
+# 在插件全部加载后同时绑定两种序列，确保按当前输入前缀搜索历史。
+for keymap in emacs viins; do
+  bindkey -M "${keymap}" '^[[A' up-line-or-beginning-search
+  bindkey -M "${keymap}" '^[[B' down-line-or-beginning-search
+  bindkey -M "${keymap}" '^[OA' up-line-or-beginning-search
+  bindkey -M "${keymap}" '^[OB' down-line-or-beginning-search
+done
