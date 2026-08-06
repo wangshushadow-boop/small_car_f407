@@ -1,8 +1,7 @@
 # 树莓派运维
 
 默认树莓派为 `ubuntu@192.168.3.85`，项目目录为
-`~/small_car_f407/robot_host`。WSL 上的查看、录包和可视化操作见
-[WSL 操作](docs/wsl_operations.md)。首次部署见[部署文档](docs/deployment.md)。
+`~/small_car_f407/robot_host`。首次部署见[部署文档](docs/deployment.md)。
 
 ## 容器管理
 

@@ -11,7 +11,6 @@
 | `src/small_car_nav2` | Nav2 参数与整机启动入口 |
 | `src/small_car_av` | 树莓派摄像头与 Jabra 麦克风采集 |
 | `src/small_car_interfaces` | 音频帧消息定义 |
-| `src/small_car_agent` | ROS 音视频缓存、VAD 与 Agent 事件发布 |
 | `apps` | 无 ROS 依赖的诊断工具 |
 | `ros2` | Dockerfile 与 Compose |
 | `scripts` | WSL 环境和一键部署脚本 |
@@ -42,26 +41,16 @@ ros2 bag record --topics /car/camera/image/compressed /car/camera/camera_info /c
 
 ## Agent 感知输入
 
-`small_car_agent` 在 Agent 所在的 ROS 2 进程中订阅相机压缩图像和音频帧，提供
-`PerceptionTool.get_latest_perception()`。该方法输出最新 JPEG、与其时间对齐的最近音频
-和标准 WAV 字节；模型适配层可通过 `to_model_input()` 取得 JPEG data URL 与元数据。
-模块边界如下：
-
-| 模块 | 职责 |
-| --- | --- |
-| `perception.py` | 音视频帧、WAV 和 Agent 感知快照的数据结构 |
-| `perception_tool.py` | 订阅 ROS topic、缓存并按时间组装快照 |
-| `voice_activity.py` | 基于音频能量检测一句话开始与结束 |
-| `agent_events.py` | 在语音结束时发布 `/car/agent/speech_finished` |
-
-LangGraph、模型路由、记忆和工具调度位于 [`llm_agent/agent`](../llm_agent/agent/README.md)。
-详细启动与接入方式见 [WSL 操作](docs/wsl_operations.md)。
+Agent 进程内的音视频缓存、VAD 与语音结束事件由
+[`llm_agent/input/ros_perception.py`](../llm_agent/input/ros_perception.py) 直接订阅
+`/car/camera/image/compressed` 与 `/car/audio/input` 完成，并在语音结束事件里组装
+WAV 与 JPEG data URL 交给 LangGraph。LangGraph、模型路由、记忆和工具调度位于
+[`llm_agent/agent`](../llm_agent/agent/README.md)。
 
 ## 文档
 
 - [部署与验收](docs/deployment.md)
 - [树莓派运维](operations.md)
-- [WSL 操作](docs/wsl_operations.md)
 - [架构与数据流](docs/architecture.md)
 - [ROS 2 接口](docs/ros_interfaces.md)
 - [小车底盘标定](docs/chassis_calibration.md)
