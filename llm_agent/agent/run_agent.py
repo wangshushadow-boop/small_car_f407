@@ -2,7 +2,7 @@
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from .graph import build_graph
-from .ros_event_source import RosAgentEventSource
+from llm_agent.input.ros_perception import RosPerceptionInput
 
 
 def main() -> None:
@@ -11,8 +11,8 @@ def main() -> None:
     def handle(event: dict) -> None:
         answer = graph.invoke(event).get("answer", "（无回复）")
         print(f"\nMiniCPM-o：{answer}", flush=True)
-    node = RosAgentEventSource(handle)
-    node.get_logger().info("Agent 已启动，等待 /car/agent/speech_finished")
+    node = RosPerceptionInput(handle)
+    node.get_logger().info("Agent 已启动，直接订阅树莓派音视频 topic")
     try:
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
