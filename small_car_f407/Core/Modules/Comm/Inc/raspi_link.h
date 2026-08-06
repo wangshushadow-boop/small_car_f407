@@ -2,7 +2,7 @@
  * @file raspi_link.h
  * @brief 声明 USART3 树莓派二进制协议的收发、控制和遥测接口。
  *
- * 帧格式、消息编号和字段单位必须与 ros2_host 协议模块保持一致。
+ * 帧格式、消息编号和字段单位必须与 robot_host 协议模块保持一致。
  */
 #ifndef RASPI_LINK_H_
 #define RASPI_LINK_H_

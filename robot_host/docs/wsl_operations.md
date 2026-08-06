@@ -7,7 +7,7 @@
 在 WSL 中执行：
 
 ```zsh
-cd /mnt/d/work/smart_car/ros2_host
+cd /mnt/d/work/smart_car/robot_host
 bash scripts/setup_wsl_ros_env.sh 192.168.3.85
 ```
 
@@ -33,7 +33,7 @@ ros2 topic info /car/camera/image/compressed --verbose
 `ros2 node list` 没有标题；没有任何输出表示当前 WSL 未发现节点。先重新执行“进入 ROS 终端”的命令；仍为空时，确认树莓派容器运行：
 
 ```zsh
-ssh ubuntu@192.168.3.85 'cd ~/small_car_f407/ros2_host/ros2 && docker compose ps'
+ssh ubuntu@192.168.3.85 'cd ~/small_car_f407/robot_host/ros2 && docker compose ps'
 ```
 
 ## 查看相机

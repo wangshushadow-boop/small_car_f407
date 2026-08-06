@@ -8,12 +8,12 @@ This workspace contains two cooperating components:
   `Core/Modules/<Area>/{Inc,Src}`; CubeMX startup and peripheral code is in
   `Core/Inc` and `Core/Src`. `Drivers/`, `Middlewares/`, and `USB_HOST/` contain
   vendor or generated code. Hardware notes are in `small_car_f407/docs/`.
-- `ros2_host/` is the Raspberry Pi/ROS 2 host. ROS packages are under `src/`,
+- `robot_host/` is the Raspberry Pi/ROS 2 host. ROS packages are under `src/`,
   standalone diagnostics under `apps/`, deployment files under `ros2/` and
   `systemd/`, and operational documentation under `docs/`.
 
 Keep protocol changes synchronized between `Core/Modules/Comm` and
-`ros2_host/src/small_car_base/protocol`.
+`robot_host/src/small_car_base/protocol`.
 
 ## Build, Test, and Development Commands
 
@@ -27,7 +27,7 @@ cmake --build --preset Debug
 Use the `Release` preset for size/performance checks. The ARM GCC toolchain,
 CMake 3.22+, and Ninja are required.
 
-From `ros2_host/` on Linux/WSL:
+From `robot_host/` on Linux/WSL:
 
 ```bash
 cmake -S . -B build && cmake --build build
@@ -35,7 +35,7 @@ ctest --test-dir build --output-on-failure
 ```
 
 For the ROS workspace, source ROS 2 Kilted and run the `colcon` command documented
-in `ros2_host/README.md`. Use `docker compose -f ros2/compose.yaml up --build -d`
+in `robot_host/README.md`. Use `docker compose -f ros2/compose.yaml up --build -d`
 for the hardware-integrated container.
 
 ## Coding Style & Naming Conventions

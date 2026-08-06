@@ -1,14 +1,14 @@
 # 树莓派运维
 
 默认树莓派为 `ubuntu@192.168.3.85`，项目目录为
-`~/small_car_f407/ros2_host`。WSL 上的查看、录包和可视化操作见
+`~/small_car_f407/robot_host`。WSL 上的查看、录包和可视化操作见
 [WSL 操作](docs/wsl_operations.md)。首次部署见[部署文档](docs/deployment.md)。
 
 ## 容器管理
 
 ```bash
 ssh ubuntu@192.168.3.85
-cd ~/small_car_f407/ros2_host/ros2
+cd ~/small_car_f407/robot_host/ros2
 docker compose ps
 docker compose logs -f small_car_ros2
 docker compose restart small_car_ros2
@@ -25,7 +25,7 @@ docker compose up --build -d --force-recreate
 ```bash
 docker compose exec small_car_ros2 bash
 source /opt/ros/kilted/setup.bash
-source /workspace/ros2_host/install-ros/setup.bash
+source /workspace/robot_host/install-ros/setup.bash
 ```
 
 容器使用 `ROS_DOMAIN_ID=0` 和 Cyclone DDS；运行检查命令前，应保持该环境一致。

@@ -463,7 +463,7 @@ minicpm-o-4.5-awq
 ## 15. 常见故障
 
 树莓派 ROS 2 双向 DDS 配置与验证见
-[`ros2_host/docs/wsl_raspberry_pi_ros.md`](../../ros2_host/docs/wsl_raspberry_pi_ros.md)。
+[`robot_host/docs/wsl_raspberry_pi_ros.md`](../../robot_host/docs/wsl_raspberry_pi_ros.md)。
 
 ### `UVA is not available`
 

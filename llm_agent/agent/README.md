@@ -11,6 +11,6 @@
 | `minicpm_client.py` | 本地 OpenAI 兼容 API 的图像、音频与文本调用 |
 | `run_agent.py` | 可直接运行的 Agent 入口 |
 
-数据边界：`ros2_host` 发布 `small_car_interfaces/msg/SpeechEvent`；本目录订阅它。
+数据边界：`robot_host` 发布 `small_car_interfaces/msg/SpeechEvent`；本目录订阅它。
 Agent 可使用图像和 WAV 进行本轮推理，但长期记忆只应保存转写、摘要和任务状态。
 完整运行步骤见[语音对话链路](../docs/agent_ros_voice_loop.md)。

@@ -1,6 +1,6 @@
 # 树莓派上位机
 
-`ros2_host` 连接 STM32F407 底盘与 ROS 2/Nav2。MCU 负责电机闭环、传感器采集和实时安全；树莓派负责协议转换、状态估计、导航及上层应用。
+`robot_host` 连接 STM32F407 底盘与 ROS 2/Nav2。MCU 负责电机闭环、传感器采集和实时安全；树莓派负责协议转换、状态估计、导航及上层应用。
 
 ## 目录
 
@@ -73,7 +73,7 @@ LangGraph、模型路由、记忆和工具调度位于 [`llm_agent/agent`](../ll
 ## 快速部署
 
 ```powershell
-.\ros2_host\scripts\sync_ros2_host.ps1
+.\robot_host\scripts\sync_ros2_host.ps1
 ```
 
 脚本上传源码、运行宿主机测试，并重建和启动 ROS 2 容器。

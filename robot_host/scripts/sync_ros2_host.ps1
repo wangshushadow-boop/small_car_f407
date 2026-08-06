@@ -1,4 +1,4 @@
-﻿# 打包并上传 ros2_host。
+﻿# 打包并上传 robot_host。
 # 停止旧容器。
 [CmdletBinding()]
 param(
@@ -9,7 +9,7 @@ param(
   [string]$UserName = "ubuntu",
 
   # 上位机上的部署目录。
-  [string]$RemoteProject = "/home/ubuntu/small_car_f407/ros2_host",
+  [string]$RemoteProject = "/home/ubuntu/small_car_f407/robot_host",
 
   # SSH 端口。
   [int]$SshPort = 22
@@ -18,7 +18,7 @@ param(
 # 任意命令失败后立即停止。
 $ErrorActionPreference = "Stop"
 
-# 脚本位于 ros2_host/scripts，父目录就是需要部署的 ros2_host。
+# 脚本位于 robot_host/scripts，父目录就是需要部署的 robot_host。
 $sourceRoot = Split-Path -Parent $PSScriptRoot
 $workspaceRoot = Split-Path -Parent $sourceRoot
 $sourceName = Split-Path -Leaf $sourceRoot
@@ -30,9 +30,9 @@ $remoteArchive = "/tmp/$archiveName"
 $remoteTarget = "${UserName}@${HostAddress}"
 
 try {
-  Write-Host "[1/4] 打包 ros2_host 源码..."
+  Write-Host "[1/4] 打包 robot_host 源码..."
 
-  # 从仓库根目录打包，压缩包的第一层目录为 ros2_host。
+  # 从仓库根目录打包，压缩包的第一层目录为 robot_host。
   Push-Location $workspaceRoot
   try {
     $tarArgs = @(

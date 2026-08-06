@@ -49,7 +49,7 @@ scp build/Release/small_car_bootloader.bin `
 
 ```bash
 ssh ubuntu@192.168.3.85
-cd ~/small_car_f407/ros2_host/ros2
+cd ~/small_car_f407/robot_host/ros2
 docker compose down
 st-info --probe
 st-flash --reset write \
@@ -67,7 +67,7 @@ st-flash --reset write \
 烧录 Bootloader 后，通过 OTA 安装第一个 App：
 
 ```bash
-cd ~/small_car_f407/ros2_host
+cd ~/small_car_f407/robot_host
 ./scripts/update_mcu_firmware.sh \
   ~/small_car_f407/firmware/small_car_f407.bin \
   1
@@ -80,7 +80,7 @@ cd ~/small_car_f407/ros2_host
 ```bash
 scp small_car_f407.bin ubuntu@192.168.3.85:/tmp/
 ssh ubuntu@192.168.3.85
-cd ~/small_car_f407/ros2_host
+cd ~/small_car_f407/robot_host
 ./scripts/update_mcu_firmware.sh /tmp/small_car_f407.bin 2
 ```
 
@@ -94,7 +94,7 @@ cd ~/small_car_f407/ros2_host
 只查询版本时，先释放被 ROS 容器占用的串口：
 
 ```bash
-cd ~/small_car_f407/ros2_host/ros2
+cd ~/small_car_f407/robot_host/ros2
 docker compose down
 python3 ../tools/mcu_ota.py \
   --status \
@@ -117,7 +117,7 @@ MCU OTA。
 传输。如果 ROS 容器没有自动恢复：
 
 ```bash
-cd ~/small_car_f407/ros2_host/ros2
+cd ~/small_car_f407/robot_host/ros2
 docker compose up -d
 ```
 

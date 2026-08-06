@@ -63,7 +63,7 @@ ros2 topic pub --wait-matching-subscriptions 1 -r 20 -t 60 /cmd_vel_nav \
 起转阈值：
 
 ```bash
-python3 /workspace/ros2_host/scripts/calibrate_wheel_pwm.py \
+python3 /workspace/robot_host/scripts/calibrate_wheel_pwm.py \
   --confirm-wheels-off-ground
 ```
 
@@ -123,7 +123,7 @@ ros2 topic pub --wait-matching-subscriptions 1 -r 20 /cmd_vel_nav geometry_msgs/
 架空时可检查左右轮组的基础一致性：
 
 ```bash
-python3 /workspace/ros2_host/scripts/calibrate_wheel_balance.py
+python3 /workspace/robot_host/scripts/calibrate_wheel_balance.py
 ```
 
 当前架空正反向差异均小于 2%，因此保持
@@ -189,7 +189,7 @@ ros2 topic pub --wait-matching-subscriptions 1 -r 20 /cmd_vel_nav geometry_msgs/
 车身静止时可自动采集 20 秒 IMU 数据：
 
 ```bash
-python3 /workspace/ros2_host/scripts/calibrate_imu_static.py
+python3 /workspace/robot_host/scripts/calibrate_imu_static.py
 ```
 
 两轮架空静止采样得到的保守配置为 `imu_acceleration_variance=0.018`、

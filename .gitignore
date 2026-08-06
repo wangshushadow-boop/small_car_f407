@@ -39,7 +39,7 @@ install_manifest.txt
 .idea/
 .codex_tmp/
 __pycache__/
-ros2_host/runtime/
+robot_host/runtime/
 *.log
 *.tmp
 *.bak

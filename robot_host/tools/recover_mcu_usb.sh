@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-project_dir="/home/ubuntu/small_car_f407/ros2_host"
+project_dir="/home/ubuntu/small_car_f407/robot_host"
 compose_dir="${project_dir}/ros2"
 request_file="${project_dir}/runtime/mcu_recovery.request"
 serial_device="/dev/serial/by-id/usb-1a86_USB_Single_Serial_5C2C059301-if00"

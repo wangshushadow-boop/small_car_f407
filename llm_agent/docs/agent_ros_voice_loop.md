@@ -50,7 +50,7 @@ export MINICPM_API_KEY='<与模型服务相同的密钥>'
 
 ```zsh
 source /opt/ros/kilted/setup.zsh
-source /mnt/d/work/smart_car/ros2_host/install-ros/setup.zsh
+source /mnt/d/work/smart_car/robot_host/install-ros/setup.zsh
 ros2 run small_car_agent agent_event_node
 ```
 
